@@ -1,0 +1,91 @@
+{
+  "command_guard": {
+    "rules": [
+      {
+        "id": "recursive-force-delete",
+        "pattern": "\\brm\\s+(-[a-zA-Z]*([rR][a-zA-Z]*[fF]|[fF][a-zA-Z]*[rR])|-[rR]\\s+-[fF]|-[fF]\\s+-[rR]|--recursive\\s+--force|--force\\s+--recursive)",
+        "blocks": "a recursive force-delete (rm -rf), which removes a tree with no confirmation and no undo",
+        "instead": "delete the named paths (rm path/one path/two), or move them to a trash directory you can inspect"
+      },
+      {
+        "id": "blanket-git-stage",
+        "pattern": "\\bgit\\s+(-C\\s+\\S+\\s+)*add\\s+([^|;&]*\\s)?(-A|--all|\\.|\\./)(\\s|$)",
+        "blocks": "blanket staging (git add -A / git add .), which sweeps up secrets, local state files and unrelated edits",
+        "instead": "stage the files you changed by name: git add src/thing.py tests/test_thing.py"
+      },
+      {
+        "id": "wide-chmod",
+        "pattern": "\\bchmod\\s+([^|;&]*\\s)?(-R\\b|--recursive\\b|777|666|a\\+w|o\\+w)",
+        "blocks": "a recursive or world-writable chmod, which quietly opens up every file under a tree",
+        "instead": "set the one mode you need on the one file: chmod 755 tools/script.sh"
+      },
+      {
+        "id": "force-push-protected",
+        "pattern": "\\bgit\\s+(-C\\s+\\S+\\s+)*push\\b(?=[^|;&]*(--force(?!-with-lease)|\\s-f(\\s|$)))(?=[^|;&]*\\b(main|master)\\b)",
+        "blocks": "a force-push to a protected branch, which rewrites history other people have already pulled",
+        "instead": "push a branch and open a pull request, or use --force-with-lease on your own branch"
+      },
+      {
+        "id": "curl-pipe-to-shell",
+        "pattern": "\\b(curl|wget)\\b[^|;&]*\\|\\s*(sudo\\s+)?(ba|z|k)?sh\\b",
+        "blocks": "piping a downloaded script straight into a shell, which executes code nobody read",
+        "instead": "download to a file, read it, then run it: curl -fsSL URL -o install.sh && less install.sh && bash install.sh"
+      },
+      {
+        "id": "git-reset-hard",
+        "pattern": "\\bgit\\s+(-C\\s+\\S+\\s+)*reset\\s+[^|;&]*--hard",
+        "blocks": "git reset --hard, which throws away uncommitted work with no recovery path",
+        "instead": "git stash to park the changes, or commit them on a scratch branch first"
+      },
+      {
+        "id": "git-clean-force",
+        "pattern": "\\bgit\\s+(-C\\s+\\S+\\s+)*clean\\s+[^|;&]*-[a-zA-Z]*f",
+        "blocks": "git clean -f, which deletes untracked files that were never in git to recover from",
+        "instead": "git clean -n first to see the list, then delete what you actually meant to delete"
+      }
+    ],
+    "allowlist": []
+  },
+  "file_lock": {
+    "protected": [
+      ".claude/settings.json",
+      "guardrails.json",
+      "tools/*"
+    ],
+    "token_ttl_seconds": 1800
+  },
+  "claims": {
+    "ttl_seconds": 1800,
+    "takeover_ttl_seconds": 600,
+    "exempt": [
+      ".guardrails/*",
+      "*.log"
+    ]
+  },
+  "guards": [
+    {
+      "id": "command-guard",
+      "script": "tools/command-guard.sh",
+      "red_tests": [
+        "tests/red/command-guard-recursive-delete.sh",
+        "tests/red/command-guard-blanket-stage.sh",
+        "tests/red/command-guard-curl-pipe-shell.sh"
+      ]
+    },
+    {
+      "id": "file-lock-guard",
+      "script": "tools/file-lock-guard.sh",
+      "red_tests": [
+        "tests/red/file-lock-no-token.sh",
+        "tests/red/file-lock-expired-token.sh"
+      ]
+    },
+    {
+      "id": "claims-guard",
+      "script": "tools/claims-guard.sh",
+      "red_tests": [
+        "tests/red/claims-collision.sh"
+      ]
+    }
+  ]
+}
