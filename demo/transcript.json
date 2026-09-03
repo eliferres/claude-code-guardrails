@@ -1,0 +1,17 @@
+[
+  {
+    "cmd": "printf '{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"rm -rf ./src\"}}' | tools/command-guard.sh",
+    "out": "BLOCKED by command-guard [recursive-force-delete]: a recursive force-delete (rm -rf), which removes a tree with no confirmation and no undo\n  command: rm -rf ./src\n  instead: delete the named paths (rm path/one path/two), or move them to a trash directory you can inspect\n  If this exact command is genuinely safe here, allowlist it in /path/to/checkout/demo/guardrails.json under\n  command_guard.allowlist: {\"rule\": \"recursive-force-delete\", \"command\": \"^...$\", \"why\": \"...\"}.\n  The pattern must match the whole command, so an allowlist entry frees one\n  command, never a shape.\nexit 2",
+    "status": 1
+  },
+  {
+    "cmd": "printf '{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"rm -rf ./build/cache\"}}' | tools/command-guard.sh",
+    "out": "exit 0",
+    "status": 0
+  },
+  {
+    "cmd": "printf '{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"rm -rf ./build/cache/objects\"}}' | tools/command-guard.sh",
+    "out": "BLOCKED by command-guard [recursive-force-delete]: a recursive force-delete (rm -rf), which removes a tree with no confirmation and no undo\n  command: rm -rf ./build/cache/objects\n  instead: delete the named paths (rm path/one path/two), or move them to a trash directory you can inspect\n  If this exact command is genuinely safe here, allowlist it in /path/to/checkout/demo/guardrails.json under\n  command_guard.allowlist: {\"rule\": \"recursive-force-delete\", \"command\": \"^...$\", \"why\": \"...\"}.\n  The pattern must match the whole command, so an allowlist entry frees one\n  command, never a shape.\nexit 2",
+    "status": 1
+  }
+]
