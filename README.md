@@ -1,11 +1,6 @@
 # claude-code-guardrails
 
-An agent harness is only as safe as the worst command it can run unattended.
-Telling the model not to do something is a suggestion; these four guards make
-the dangerous shapes impossible instead. They are deterministic hooks — no
-model in the loop — that refuse a command, a protected write, or a colliding
-session before it happens, and explain the safe alternative in the refusal.
-The fourth guard is the one that keeps the other three honest over months.
+Four deterministic hooks for Claude Code that refuse a dangerous command, a protected write, or a colliding session before it runs, and say what to do instead. No model in the loop. The fourth guard is a liveness harness that proves the other three still block, months later.
 
 Works with Claude Code out of the box. Bash and Python 3.9+, nothing else.
 
@@ -23,16 +18,16 @@ bash tests/run-tests.sh    # the full suite, hermetic, no network
 ```
 
 To install: copy `tools/`, `guardrails.json` and `demo/.claude/settings.json`
-into your own project root, then edit `guardrails.json` — the rules, the
+into your own project root, then edit `guardrails.json`: the rules, the
 protected paths and the allowlist are all yours. The walkthrough below runs
 every guard against the fictional workspace in `demo/`, no install needed.
 
 ## The four guards
 
 **Command guard.** A PreToolUse hook on Bash. It matches the command against a
-list of shapes you configure — recursive force-delete, blanket `git add -A`,
+list of shapes you configure (recursive force-delete, blanket `git add -A`,
 world-writable or recursive `chmod`, force-push to a protected branch,
-curl-piped-into-a-shell, `git reset --hard`, `git clean -f` — and refuses with
+curl-piped-into-a-shell, `git reset --hard`, `git clean -f`) and refuses with
 the shape it caught and the safe way to do the same job. One exact command can
 be allowlisted; a shape cannot.
 
@@ -90,7 +85,7 @@ is the source of truth):
 }
 ```
 
-Guards deny by exiting 2 with the reason on stderr — the PreToolUse contract
+Guards deny by exiting 2 with the reason on stderr: the PreToolUse contract
 that cancels the tool call and hands the text back to the agent. Everything they
 do not block exits 0 and is never seen again.
 
@@ -122,7 +117,7 @@ exit 2
 
 The config path in a real refusal is absolute; it is shortened here.
 
-The demo config allowlists exactly one command — the generated build cache —
+The demo config allowlists exactly one command (the generated build cache),
 and the neighbour path is still refused, because an allowlist entry is a whole
 anchored command, not a pattern:
 
@@ -203,7 +198,7 @@ Clean up the demo state when you are done: `rm -r demo/.guardrails`.
 | `tests/red/` | One red case per blocked shape; liveness runs these. |
 
 State lives in `.guardrails/` inside the project: the approval token, the claims
-registry, the takeover ledger and the approval log. It is git-ignored — these
+registry, the takeover ledger and the approval log. It is git-ignored: these
 are local facts about one machine's live sessions.
 
 ## What the guards enforce
@@ -223,7 +218,7 @@ are local facts about one machine's live sessions.
 ## Why deterministic guards
 
 Prompt rules degrade: they compete for attention with everything else in the
-context, and the failure is silent — you find out from the diff. A hook is
+context, and the failure is silent. You find out from the diff. A hook is
 different in kind. It runs on every call, it has no memory of what it was asked
 to overlook, and when it fires you get a refusal you can read. The tradeoff is
 that a deny-list is never complete, which is exactly why the liveness harness
