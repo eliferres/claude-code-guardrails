@@ -4,6 +4,10 @@
 make_project() {
   local dir
   dir="$(mktemp -d "${TMPDIR:-/tmp}/guardrails-fixture.XXXXXX")"
+  # Resolve through the same realpath the guards use: on macOS $TMPDIR lives under
+  # a /var symlink that resolves to /private/var, so an unresolved path here would
+  # never match the guard's (already-resolved) target path in test assertions.
+  dir="$(python3 -c 'import os,sys;print(os.path.realpath(sys.argv[1]))' "$dir")"
   mkdir -p "$dir/rules" "$dir/notes"
   printf 'team rules\n' > "$dir/rules/team-rules.md"
   printf 'scratch\n' > "$dir/notes/scratch.md"
