@@ -2,7 +2,7 @@
 
 Four deterministic hooks for Claude Code that refuse a dangerous command, a protected write, or a colliding session before it runs, and say what to do instead. No model in the loop. The fourth guard is a liveness harness that proves the other three still block, months later.
 
-Works with Claude Code out of the box. Bash and Python 3.9+, nothing else.
+Bash and Python 3.9+, nothing else.
 
 ![ci](https://github.com/eliferres/claude-code-guardrails/actions/workflows/ci.yml/badge.svg)
 
