@@ -14,7 +14,7 @@
   <circle cx="26" cy="20" r="6" fill="#ff5f57"/>
   <circle cx="48" cy="20" r="6" fill="#febc2e"/>
   <circle cx="70" cy="20" r="6" fill="#28c840"/>
-  <text x="92" y="26" class="dim" font-size="14">taste, enforced</text>
+  <text x="92" y="26" class="dim" font-size="14">claude-code-guardrails</text>
   <text x="24" y="80"><tspan class="p">$</tspan><tspan class="cmd" dx="8">printf '{&quot;tool_name&quot;:&quot;Bash&quot;,&quot;tool_input&quot;:{&quot;command&quot;:&quot;rm \</tspan></text>
   <text x="24" y="112" class="cmd">    -rf ./src&quot;}}' | tools/command-guard.sh</text>
   <text x="24" y="144" class="bad">BLOCKED by command-guard [recursive-force-delete]: a recurs…</text>
