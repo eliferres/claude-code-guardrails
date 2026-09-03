@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 492" role="img" aria-labelledby="t d" font-family="SF Mono, Menlo, Consolas, monospace" font-size="20">
+  <title id="t">claude-code-guardrails demo terminal</title>
+  <desc id="d">A terminal session: command-guard blocks a recursive force-delete, lets through the one allowlisted build-cache path, and still blocks a neighbour path one directory deeper, because an allowlist entry frees one exact command, never a shape.</desc>
+  <style>
+    .p { fill: #7ee2a8; }
+    .cmd { fill: #e8eef5; }
+    .dim { fill: #9fb0c0; }
+    .bad { fill: #ff9494; }
+    .good { fill: #7ee2a8; }
+  </style>
+  <rect width="660" height="492" rx="14" fill="#0b0f14"/>
+  <rect width="660" height="40" rx="14" fill="#11161d"/>
+  <rect y="26" width="660" height="14" fill="#11161d"/>
+  <circle cx="26" cy="20" r="6" fill="#ff5f57"/>
+  <circle cx="48" cy="20" r="6" fill="#febc2e"/>
+  <circle cx="70" cy="20" r="6" fill="#28c840"/>
+  <text x="92" y="26" class="dim" font-size="14">taste, enforced</text>
+  <text x="24" y="80"><tspan class="p">$</tspan><tspan class="cmd" dx="8">printf '{&quot;tool_name&quot;:&quot;Bash&quot;,&quot;tool_input&quot;:{&quot;command&quot;:&quot;rm \</tspan></text>
+  <text x="24" y="112" class="cmd">    -rf ./src&quot;}}' | tools/command-guard.sh</text>
+  <text x="24" y="144" class="bad">BLOCKED by command-guard [recursive-force-delete]: a recurs…</text>
+  <text x="24" y="176" class="dim">  command: rm -rf ./src</text>
+  <text x="24" y="208" class="dim">  instead: delete the named paths, or move them to a trash…</text>
+  <text x="24" y="240" class="dim">exit 2</text>
+  <text x="24" y="272"><tspan class="p">$</tspan><tspan class="cmd" dx="8">printf '{&quot;tool_name&quot;:&quot;Bash&quot;,&quot;tool_input&quot;:{&quot;command&quot;:&quot;rm \</tspan></text>
+  <text x="24" y="304" class="cmd">    -rf ./build/cache&quot;}}' | tools/command-guard.sh</text>
+  <text x="24" y="336" class="good">exit 0 - the allowlisted build cache clears the guard</text>
+  <text x="24" y="368"><tspan class="p">$</tspan><tspan class="cmd" dx="8">printf '{&quot;tool_name&quot;:&quot;Bash&quot;,&quot;tool_input&quot;:{&quot;command&quot;:&quot;rm \</tspan></text>
+  <text x="24" y="400" class="cmd">    -rf ./build/cache/objects&quot;}}' | tools/command-guard.sh</text>
+  <text x="24" y="432" class="bad">BLOCKED by command-guard [recursive-force-delete]: the neig…</text>
+  <text x="24" y="464" class="dim">exit 2 - an allowlist entry frees one exact command, never…</text>
+</svg>

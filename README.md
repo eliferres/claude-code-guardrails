@@ -11,6 +11,8 @@ Works with Claude Code out of the box. Bash and Python 3.9+, nothing else.
 
 ![ci](https://github.com/eliferres/claude-code-guardrails/actions/workflows/ci.yml/badge.svg)
 
+<img src="demo/terminal.svg" width="660" alt="Terminal session showing command-guard blocking a recursive force-delete, allowing the one allowlisted build-cache path, and still blocking a neighbour path one directory deeper.">
+
 ## Quick start
 
 ```bash
