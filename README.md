@@ -10,12 +10,28 @@ Bash and Python 3.9+, nothing else.
 
 ## Quick start
 
+Install the command (from GitHub; it is not on PyPI):
+
+```bash
+pipx install git+https://github.com/eliferres/claude-code-guardrails
+```
+
+Or work from a clone:
+
 ```bash
 git clone https://github.com/eliferres/claude-code-guardrails.git
 cd claude-code-guardrails
 tools/liveness.sh          # every installed guard, proved to still block
 bash tests/run-tests.sh    # the full suite, hermetic, no network
 ```
+
+Installed, each script in `tools/` is a subcommand of one command:
+`claude-code-guardrails command-guard` does what `tools/command-guard.sh` does
+(the others are `file-lock`, `lock-approve`, `claims-guard`, `claims-clear`,
+`claims-takeover` and `liveness`). It reads `guardrails.json` from
+`$GUARDRAILS_PROJECT_DIR`, then `$CLAUDE_PROJECT_DIR`, then the current
+directory. `liveness` also needs the kit's `tools/` and `tests/`, so run it
+inside a clone.
 
 To install: copy `tools/`, `guardrails.json` and `demo/.claude/settings.json`
 into your own project root, then edit `guardrails.json`: the rules, the

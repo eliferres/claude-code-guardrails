@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "claude-code-guardrails"
+dynamic = ["version"]
+description = "Claude Code hooks that refuse a dangerous command, a protected write, or a colliding session."
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+authors = [{ name = "Eli Ferres" }]
+
+[project.urls]
+Source = "https://github.com/eliferres/claude-code-guardrails"
+Changelog = "https://github.com/eliferres/claude-code-guardrails/blob/main/CHANGELOG.md"
+
+[project.scripts]
+claude-code-guardrails = "claude_code_guardrails:main"
+
+[tool.setuptools]
+py-modules = ["claude_code_guardrails"]
+package-dir = { "" = "tools" }
+
+[tool.setuptools.dynamic]
+version = { attr = "claude_code_guardrails.__version__" }
