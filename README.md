@@ -8,7 +8,7 @@ Bash and Python 3.9+, nothing else.
 
 <img src="demo/terminal.svg" width="660" alt="Terminal session showing command-guard blocking a recursive force-delete, allowing the one allowlisted build-cache path, and still blocking a neighbour path one directory deeper.">
 
-## Quick start
+## Install
 
 Install the command (from GitHub; it is not on PyPI):
 
@@ -33,12 +33,13 @@ Installed, each script in `tools/` is a subcommand of one command:
 directory. `liveness` also needs the kit's `tools/` and `tests/`, so run it
 inside a clone.
 
-To install: copy `tools/`, `guardrails.json` and `demo/.claude/settings.json`
-into your own project root, then edit `guardrails.json`: the rules, the
-protected paths and the allowlist are all yours. The walkthrough below runs
+To put the kit in a project without installing anything, copy `tools/`,
+`guardrails.json` and `demo/.claude/settings.json` into your project root, then
+edit `guardrails.json`: the rules, the protected paths and the allowlist are all
+yours. The walkthrough below runs
 every guard against the fictional workspace in `demo/`, no install needed.
 
-## The three guards and the liveness harness
+## The three guards
 
 **Command guard.** A PreToolUse hook on Bash. It matches the command against a
 list of shapes you configure (recursive force-delete, blanket `git add -A`,
@@ -59,15 +60,17 @@ session is refused, told who holds it and for how long, and given two ways out:
 release the claim, or take it over. A takeover is logged, and what the displaced
 session was holding is written to a ledger so it gets picked up rather than lost.
 
-**Gate liveness.** Guards rot quietly: a refactor loosens a pattern, a test
-starts passing for the wrong reason, and the wall has been open for a month. The
-manifest lists every installed guard, every guard needs at least one red case
-proving it still blocks, and the harness fails if an entry has no red case, if a
-red case stops blocking, or if a red case still passes with the guard stubbed
-out. That last check is the point: a test that passes without the guard was
-never testing the guard.
+## Liveness: proving a guard still blocks
 
-## The wiring, verbatim
+Guards rot quietly: a refactor loosens a pattern, a test starts passing for the
+wrong reason, and the wall has been open for a month. The manifest lists every
+installed guard, every guard needs at least one red case proving it still
+blocks, and the harness fails if an entry has no red case, if a red case stops
+blocking, or if a red case still passes with the guard stubbed out. That last
+check is the point: a test that passes without the guard was never testing the
+guard.
+
+## Wiring it into Claude Code
 
 This is the whole install, copied from `demo/.claude/settings.json` (that file
 is the source of truth):
@@ -193,26 +196,15 @@ git checkout guardrails.json
 
 Clean up the demo state when you are done: `rm -r demo/.guardrails`.
 
-## What is in the box
+## Why deterministic guards
 
-| Path | Role |
-|---|---|
-| `tools/command-guard.sh` | PreToolUse on Bash: refuses configured command shapes. |
-| `tools/file-lock-guard.sh` | PreToolUse on writes: protected paths need a token. |
-| `tools/lock-approve.sh` | Mints the batch-scoped, expiring approval token. |
-| `tools/claims-guard.sh` | PreToolUse on writes: refuses a file another session holds. |
-| `tools/claims-clear.sh` | Releases claims; wire it to SessionEnd. |
-| `tools/claims-takeover.sh` | Takes a claim and ledgers what it displaced. |
-| `tools/liveness.sh` | Proves every guard in the manifest still goes red. |
-| `tools/claude_code_guardrails.py` | The implementation all seven shims call. Stdlib only. |
-| `guardrails.json` | One config: rules, allowlist, protected paths, claims, manifest. |
-| `demo/` | A fictional workspace and the hook wiring, for the walkthrough. |
-| `tests/run-tests.sh` | The suite: real fixtures in temp dirs, no mocks. |
-| `tests/red/` | One red case per blocked shape; liveness runs these. |
-
-State lives in `.guardrails/` inside the project: the approval token, the claims
-registry, the takeover ledger and the approval log. It is git-ignored: these
-are local facts about one machine's live sessions.
+Prompt rules degrade: they compete for attention with everything else in the
+context, and the failure is silent. You find out from the diff. A hook is
+different in kind. It runs on every call, it has no memory of what it was asked
+to overlook, and when it fires you get a refusal you can read. The tradeoff is
+that a deny-list is never complete, which is exactly why the liveness harness
+matters more than the rules: the value is not that these particular seven shapes
+are blocked, it is that you can still prove, months later, that they are.
 
 ## What the guards enforce
 
@@ -227,16 +219,6 @@ are local facts about one machine's live sessions.
    what the displaced session was holding.
 5. **Every gate can still go red.** Proved on every CI run, including against a
    stubbed-out guard, so a test cannot pass for the wrong reason.
-
-## Why deterministic guards
-
-Prompt rules degrade: they compete for attention with everything else in the
-context, and the failure is silent. You find out from the diff. A hook is
-different in kind. It runs on every call, it has no memory of what it was asked
-to overlook, and when it fires you get a refusal you can read. The tradeoff is
-that a deny-list is never complete, which is exactly why the liveness harness
-matters more than the rules: the value is not that these particular seven shapes
-are blocked, it is that you can still prove, months later, that they are.
 
 ## Limitations
 
@@ -255,6 +237,22 @@ are blocked, it is that you can still prove, months later, that they are.
 - Exercised with Claude Code. Any harness that can run a hook script and read an
   exit code can use these, but the payload shape is Claude Code's.
 
-## License
+## Files
 
-MIT
+- `tools/command-guard.sh`: PreToolUse on Bash, refuses configured command shapes.
+- `tools/file-lock-guard.sh`: PreToolUse on writes, protected paths need a token.
+- `tools/lock-approve.sh`: mints the batch-scoped, expiring approval token.
+- `tools/claims-guard.sh`: PreToolUse on writes, refuses a file another session holds.
+- `tools/claims-clear.sh`: releases claims; wire it to SessionEnd.
+- `tools/claims-takeover.sh`: takes a claim and ledgers what it displaced.
+- `tools/liveness.sh`: proves every guard in the manifest still goes red.
+- `tools/claude_code_guardrails.py`: the implementation all seven shims call. Stdlib only.
+- `guardrails.json`: one config, holding the rules, allowlist, protected paths, claims and manifest.
+- `demo/`: a fictional workspace and the hook wiring, for the walkthrough.
+- `tests/run-tests.sh`: the suite, real fixtures in temp dirs, no mocks.
+- `tests/red/`: one red case per blocked shape; liveness runs these.
+- `tests/demo-transcript.sh`: replays `demo/transcript.json` and checks the image against it.
+
+State lives in `.guardrails/` inside the project: the approval token, the claims
+registry, the takeover ledger and the approval log. It is git-ignored: these
+are local facts about one machine's live sessions.
