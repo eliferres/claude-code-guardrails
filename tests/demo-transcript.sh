@@ -74,49 +74,80 @@ def replay():
 
 
 def svg_rows():
-    """Every text row of the picture below the title bar, in order, indentation kept."""
+    """The session rows of the picture, in order, as (kind, text).
+
+    kind is "prompt" for the row a command starts on, "cont" for the rest of a
+    wrapped command, "out" for a line of output. Nothing here keys on a
+    coordinate or a row count: the only text that is not session text is the
+    window's own label, and it is the only one carrying a font-size of its own.
+    """
     root = ET.parse(PICTURE).getroot()
     namespace = {"svg": "http://www.w3.org/2000/svg"}
     rows = []
     for element in root.findall("svg:text", namespace):
-        y = element.get("y")
-        if y is None or int(y) < 40:
-            continue  # the chrome label in the title bar, not session text
+        if element.get("font-size"):
+            continue  # the label in the window chrome, not session text
         spans = element.findall("svg:tspan", namespace)
-        rows.append(spans[-1].text or "" if spans else element.text or "")
+        if spans:
+            rows.append(("prompt", spans[-1].text or ""))
+        elif element.get("class") == "cmd":
+            # a wrapped command's later rows are indented; the command itself is
+            # split on spaces, so the indentation is the renderer's, not the text's
+            rows.append(("cont", (element.text or "").lstrip()))
+        else:
+            rows.append(("out", element.text or ""))
     return rows
 
 
-def is_command_row(row):
-    """A command row is a run of whole words from some cmd: the renderer wraps a long
-    command on spaces, ending a wrapped row with ` \\` and indenting what follows."""
-    text = row[4:] if row.startswith("    ") else row
-    text = text[:-2] if text.endswith(" \\") else text
-    words = text.split(" ")
-    for entry in transcript:
-        parts = entry["cmd"].split(" ")
-        if any(parts[i:i + len(words)] == words for i in range(len(parts))):
-            return True
-    return False
-
-
-def is_output_row(row):
-    head = row[:-1] if row.endswith("…") else row
-    for entry in transcript:
-        for line in entry["out"].splitlines():
-            if line.startswith(head):
-                return True
-    return False
+def shows(row, line):
+    """A row shows an output line whole, or end-trimmed with exactly one ellipsis."""
+    if row == line:
+        return True
+    head = row[:-1]
+    return (row.endswith("…") and row.count("…") == 1
+            and len(head) < len(line) and line.startswith(head))
 
 
 def picture():
+    """Every entry the picture shows, it shows whole and in order: the command
+    rebuilt exactly, then each of its output lines as its own row. It may stop
+    between commands, and no row may be left over."""
     rows = svg_rows()
     if not rows:
         fail("%s has no session rows" % PICTURE)
-    for index, row in enumerate(rows, start=1):
-        if not is_command_row(row) and not is_output_row(row):
-            fail("row %d of the picture is in neither the commands nor the output "
-                 "of the transcript: %r" % (index, row))
+    index = 0
+    for number, entry in enumerate(transcript, start=1):
+        if index == len(rows):
+            return  # stopping at a command boundary is the one allowed cut
+        kind, text = rows[index]
+        if kind != "prompt":
+            fail("row %d should open command %d (%s), and is %s: %r"
+                 % (index + 1, number, entry["cmd"], kind, text))
+        chunks = [text]
+        index += 1
+        while chunks[-1].endswith(" \\"):
+            if index == len(rows) or rows[index][0] != "cont":
+                fail("command %d breaks off after row %d: %r" % (number, index, chunks[-1]))
+            chunks.append(rows[index][1])
+            index += 1
+        rebuilt = " ".join(chunk[:-2] if chunk.endswith(" \\") else chunk for chunk in chunks)
+        if rebuilt != entry["cmd"]:
+            fail("the rows for command %d rebuild to\n        %r\n        the transcript has\n        %r"
+                 % (number, rebuilt, entry["cmd"]))
+        for line in entry["out"].splitlines():
+            if not line.strip():
+                continue  # the renderer drops empty rows
+            if index == len(rows):
+                fail("the picture stops inside the output of command %d, missing: %r"
+                     % (number, line))
+            kind, text = rows[index]
+            if kind != "out" or not shows(text, line):
+                fail("row %d of the picture is %s: %r\n        output line %d of command "
+                     "%d is: %r" % (index + 1, kind, text, index + 1, number, line))
+            index += 1
+    if index != len(rows):
+        fail("%d row(s) of the picture are in no transcript entry, from row %d: %r"
+             % (len(rows) - index, index + 1, rows[index][1]))
 
 
 {"replay": replay, "picture": picture}[MODE]()
