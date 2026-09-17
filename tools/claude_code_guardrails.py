@@ -18,6 +18,8 @@ blocks the tool call and hands the text back to the agent. Everything else exits
 Zero dependencies: Python 3.9+ standard library only.
 """
 
+__version__ = "1.1.0"
+
 import fnmatch
 import hashlib
 import json
@@ -28,7 +30,23 @@ import sys
 import time
 from typing import Any, Dict, List, NoReturn, Optional, Tuple
 
-KIT_ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+
+
+def kit_root() -> str:
+    """A kit checkout keeps this module in tools/ beside guardrails.json. Installed as a
+    package it lives in site-packages, so the kit is the project the hook runs for."""
+    tools = os.path.dirname(os.path.realpath(__file__))
+    checkout = os.path.dirname(tools)
+    if os.path.basename(tools) == "tools" and os.path.isfile(os.path.join(checkout, "guardrails.json")):
+        return checkout
+    for var in ("GUARDRAILS_PROJECT_DIR", "CLAUDE_PROJECT_DIR"):
+        value = os.environ.get(var)
+        if value:
+            return os.path.realpath(os.path.expanduser(value))
+    return os.path.realpath(os.getcwd())
+
+
+KIT_ROOT = kit_root()
 DENY = 2
 
 
@@ -451,6 +469,12 @@ def _print_liveness_report(lines: List[str], problems: List[str], guard_count: i
 def liveness(argv: List[str]) -> int:
     """Always checks the kit it ships inside, so CI cannot be pointed at a friendlier copy."""
     verbose = "--verbose" in argv
+    needed = ("guardrails.json", "tools", os.path.join("tests", "noop-guard.sh"))
+    missing = [name for name in needed if not os.path.exists(os.path.join(KIT_ROOT, name))]
+    if missing:
+        sys.stderr.write("liveness: %s has no %s; run it inside a kit checkout\n"
+                         % (KIT_ROOT, ", ".join(missing)))
+        return DENY
     manifest_path = os.path.join(KIT_ROOT, "guardrails.json")
     manifest, error = _read_manifest(manifest_path)
     if error is not None:
@@ -483,7 +507,17 @@ COMMANDS = {
     "liveness": liveness,
 }
 
+
+def main(argv: Optional[List[str]] = None) -> None:
+    args = sys.argv[1:] if argv is None else argv
+    if args[:1] == ["--version"]:
+        print("claude-code-guardrails %s" % __version__)
+        sys.exit(0)
+    if not args or args[0] not in COMMANDS:
+        die("usage: %s <%s> [args]"
+            % (os.path.basename(sys.argv[0]), "|".join(sorted(COMMANDS))))
+    sys.exit(COMMANDS[args[0]](args[1:]) or 0)
+
+
 if __name__ == "__main__":
-    if len(sys.argv) < 2 or sys.argv[1] not in COMMANDS:
-        die("usage: claude_code_guardrails.py <%s> [args]" % "|".join(sorted(COMMANDS)))
-    sys.exit(COMMANDS[sys.argv[1]](sys.argv[2:]) or 0)
+    main()
