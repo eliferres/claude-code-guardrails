@@ -101,13 +101,17 @@ def guard_config(section: str) -> Dict[str, Any]:
     """Guards fail OPEN on a missing or broken config: a config typo must never brick
     the harness. `liveness` is the piece that notices a guard has stopped guarding.
     The warning keeps that fail-open visible to whoever reads the hook output."""
+    path = config_path()
     try:
-        with open(config_path()) as handle:
+        with open(path) as handle:
             return json.load(handle).get(section) or {}
+    except OSError as error:
+        reason = error.strerror or str(error)  # the OSError text repeats the path
     except Exception as error:
-        sys.stderr.write("%s: warning: cannot read %s (%s); letting the call through\n"
-                         % (PROG, config_path(), error))
-        sys.exit(0)
+        reason = str(error)
+    sys.stderr.write("%s: warning: config %s: %s; the guard is letting this call through\n"
+                     % (PROG, path, reason))
+    sys.exit(0)
 
 
 def cli_config(section: str) -> Dict[str, Any]:
