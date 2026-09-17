@@ -163,5 +163,17 @@ if [ "$RC" -eq 0 ] && has "warning" "$OUT" && has "$P/guardrails.json" "$OUT" &&
 else bad "15 a malformed config fails open with a warning" "exit $RC: $OUT"; fi
 rm -r "$P"
 
+# ---------------------------------------------------------------- the demo receipt
+
+OUT="$(bash ./demo-transcript.sh replay 2>&1)"; RC=$?
+if [ "$RC" -eq 0 ]; then
+  ok "16 every command in demo/transcript.json replays to the recorded output and exit code"
+else bad "16 the demo transcript replays exactly" "$OUT"; fi
+
+OUT="$(bash ./demo-transcript.sh picture 2>&1)"; RC=$?
+if [ "$RC" -eq 0 ]; then
+  ok "17 every row of demo/terminal.svg comes from the transcript"
+else bad "17 the demo picture comes from the transcript" "$OUT"; fi
+
 printf '\n%d passed, %d failed\n' "$PASSED" "$FAILED"
 [ "$FAILED" -eq 0 ]
