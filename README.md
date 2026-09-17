@@ -1,6 +1,6 @@
 # claude-code-guardrails
 
-Three deterministic hooks for Claude Code that refuse a dangerous command, a protected write, or a colliding session before it runs, and say what to do instead. No model in the loop. A liveness harness proves the three still block, months later.
+Three deterministic guards for Claude Code that refuse a dangerous command, a protected write, or a colliding session before it runs, and say what to do instead. No model in the loop. A liveness harness proves the three still block, months later.
 
 Bash and Python 3.9+, nothing else.
 

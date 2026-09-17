@@ -16,7 +16,7 @@ Versions match the git tags.
 - Fixed guards going quiet on a `guardrails.json` that is missing, unreadable or malformed: they still let the call through, but now print one warning naming the config once and saying what was wrong with it.
 - Fixed the demo image check accepting a picture with output rows missing or out of order: it now walks the transcript in order, rebuilds each command from its rows, and requires every output line to be its own row.
 - Fixed `demo/transcript.json`, which recorded exit code 1 for two commands that exit 0 and had an `exit` line typed into their output; it is now regenerated from a real run, and a test replays every entry and checks every row of the demo image against it.
-- Fixed the README opener, which counted four hooks: `guardrails.json` lists three guards, and the liveness harness is a separate check that proves they still block.
+- Fixed the README opener, which counted four hooks and called liveness the fourth guard: there are three guards, the shipped wiring runs those three plus a cleanup command when a session ends, and liveness is a separate check that proves the guards still block.
 
 ## [1.1.0](https://github.com/eliferres/claude-code-guardrails/releases/tag/v1.1.0) - 2026-09-03
 
