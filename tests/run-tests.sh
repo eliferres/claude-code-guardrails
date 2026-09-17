@@ -157,10 +157,15 @@ rm -r "$K"
 
 P="$(make_project)"
 printf '{"command_guard": {"rules": [' > "$P/guardrails.json"
-OUT="$(run_cmd "rm -rf ./build")"; RC=$?
-if [ "$RC" -eq 0 ] && has "warning" "$OUT" && has "$P/guardrails.json" "$OUT" && has "Expecting" "$OUT"; then
-  ok "15 a malformed config fails open, but warns with its path and the parse error"
-else bad "15 a malformed config fails open with a warning" "exit $RC: $OUT"; fi
+# The two streams are kept apart here: stdout is where the harness reads hook
+# output from, so a warning written there would be read as the guard's answer.
+STDOUT="$(bash_payload "rm -rf ./build" | GUARDRAILS_PROJECT_DIR="$P" bash "$CMD_GUARD" 2>/dev/null)"; RC=$?
+STDERR="$(bash_payload "rm -rf ./build" | GUARDRAILS_PROJECT_DIR="$P" bash "$CMD_GUARD" 2>&1 >/dev/null)"
+if [ "$RC" -eq 0 ] && [ -z "$STDOUT" ] && has "warning" "$STDERR" \
+   && has "$P/guardrails.json" "$STDERR" && has "Expecting" "$STDERR"; then
+  ok "15 a malformed config fails open, warning on stderr only, with its path and the parse error"
+else bad "15 a malformed config warns on stderr and prints nothing on stdout" \
+     "exit $RC; stdout: $STDOUT; stderr: $STDERR"; fi
 rm -r "$P"
 
 # ---------------------------------------------------------------- the demo receipt
