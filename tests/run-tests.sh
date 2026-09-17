@@ -175,5 +175,40 @@ if [ "$RC" -eq 0 ]; then
   ok "17 every row of demo/terminal.svg comes from the transcript"
 else bad "17 the demo picture comes from the transcript" "$OUT"; fi
 
+# ---------------------------------------------------------------- the invoked name
+
+P="$(make_project)"
+TARGET="$P/rules/team-rules.md"
+SHARED="$P/notes/scratch.md"
+OUT="$(cd "$ROOT" && write_payload "$TARGET" \
+  | GUARDRAILS_PROJECT_DIR="$P" bash tools/file-lock-guard.sh 2>&1)"
+OUT2="$(cd "$ROOT" && write_payload "$SHARED" session-alpha \
+  | GUARDRAILS_PROJECT_DIR="$P" bash tools/claims-guard.sh 2>&1
+        cd "$ROOT" && write_payload "$SHARED" session-beta \
+  | GUARDRAILS_PROJECT_DIR="$P" bash tools/claims-guard.sh 2>&1)"
+if has 'tools/lock-approve.sh "<batch label>"' "$OUT" \
+   && has 'tools/claims-clear.sh --session' "$OUT2" \
+   && has 'tools/claims-takeover.sh' "$OUT2"; then
+  ok "18 run from a clone, a refusal names the wrapper script the reader ran"
+else bad "18 a refusal names the wrapper script in a clone" "$OUT$OUT2"; fi
+rm -r "$P"
+
+# The console script imports the module and calls main, with no wrapper to say
+# which script was run; the hints have to name the installed command instead.
+P="$(make_project)"
+TARGET="$P/rules/team-rules.md"
+LAUNCHER="$P/claude-code-guardrails"
+printf '#!/usr/bin/env python3\nimport sys\nsys.path.insert(0, "%s/tools")\nfrom claude_code_guardrails import main\nmain()\n' \
+  "$ROOT" > "$LAUNCHER"
+chmod +x "$LAUNCHER"
+OUT="$(write_payload "$TARGET" | GUARDRAILS_PROJECT_DIR="$P" "$LAUNCHER" file-lock 2>&1)"
+OUT2="$(GUARDRAILS_PROJECT_DIR="$P" "$LAUNCHER" lock-approve 2>&1)"
+if has 'claude-code-guardrails lock-approve "<batch label>"' "$OUT" \
+   && has "usage: claude-code-guardrails lock-approve" "$OUT2" \
+   && ! has ".sh" "$OUT$OUT2"; then
+  ok "19 run as the installed command, a refusal names that command, never a .sh file"
+else bad "19 the installed command names itself in hints and usage" "$OUT$OUT2"; fi
+rm -r "$P"
+
 printf '\n%d passed, %d failed\n' "$PASSED" "$FAILED"
 [ "$FAILED" -eq 0 ]
