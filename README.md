@@ -230,8 +230,10 @@ are blocked, it is that you can still prove, months later, that they are.
   starting set you extend from your own incidents.
 - Single machine, single project. Claims are files in `.guardrails/`, so two
   sessions only see each other if they share a filesystem.
-- Guards fail open on a missing or malformed config, deliberately: a config typo
-  must not brick the harness. Liveness is what tells you a guard went quiet.
+- Guards fail open on a config that is missing, unreadable or malformed,
+  deliberately: a config typo must not brick the harness. Each one prints one
+  warning on stderr naming the config and what was wrong with it, and liveness
+  is what tells you a guard went quiet.
 - The command guard reads the command as text. Variable indirection, aliases and
   a script that wraps the dangerous call will walk past it.
 - Exercised with Claude Code. Any harness that can run a hook script and read an

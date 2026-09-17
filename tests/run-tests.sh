@@ -168,6 +168,16 @@ else bad "15 a malformed config warns on stderr and prints nothing on stdout" \
      "exit $RC; stdout: $STDOUT; stderr: $STDERR"; fi
 rm -r "$P"
 
+P="$(make_project)"
+rm "$P/guardrails.json"
+STDERR="$(bash_payload "rm -rf ./build" | GUARDRAILS_PROJECT_DIR="$P" bash "$CMD_GUARD" 2>&1 >/dev/null)"; RC=$?
+NAMED="$(printf '%s' "$STDERR" | grep -oF "$P/guardrails.json" | wc -l | tr -d ' ')"
+if [ "$RC" -eq 0 ] && has "warning" "$STDERR" && [ "$NAMED" -eq 1 ]; then
+  ok "20 a config that is not there warns once, naming the file once"
+else bad "20 a missing config warns once, naming the file once" \
+     "exit $RC; named $NAMED time(s): $STDERR"; fi
+rm -r "$P"
+
 # ---------------------------------------------------------------- the demo receipt
 
 OUT="$(bash ./demo-transcript.sh replay 2>&1)"; RC=$?
