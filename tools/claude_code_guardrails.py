@@ -485,5 +485,5 @@ COMMANDS = {
 
 if __name__ == "__main__":
     if len(sys.argv) < 2 or sys.argv[1] not in COMMANDS:
-        die("usage: guardrails.py <%s> [args]" % "|".join(sorted(COMMANDS)))
+        die("usage: claude_code_guardrails.py <%s> [args]" % "|".join(sorted(COMMANDS)))
     sys.exit(COMMANDS[sys.argv[1]](sys.argv[2:]) or 0)

@@ -191,7 +191,7 @@ Clean up the demo state when you are done: `rm -r demo/.guardrails`.
 | `tools/claims-clear.sh` | Releases claims; wire it to SessionEnd. |
 | `tools/claims-takeover.sh` | Takes a claim and ledgers what it displaced. |
 | `tools/liveness.sh` | Proves every guard in the manifest still goes red. |
-| `tools/guardrails.py` | The implementation all seven shims call. Stdlib only. |
+| `tools/claude_code_guardrails.py` | The implementation all seven shims call. Stdlib only. |
 | `guardrails.json` | One config: rules, allowlist, protected paths, claims, manifest. |
 | `demo/` | A fictional workspace and the hook wiring, for the walkthrough. |
 | `tests/run-tests.sh` | The suite: real fixtures in temp dirs, no mocks. |
