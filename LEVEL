@@ -1,0 +1,8 @@
+# What this project is responsible for, and what happens when it breaks.
+level: 1
+owner: Eli Ferres
+monitor: GitHub Actions on every push and pull request; the badge in the README is the health signal. Failures surface as issues.
+rollback: git revert, then re-tag. Installed copies are pinned to a version and are unaffected until the user upgrades.
+migrations: n/a: the tool owns no database and no schema.
+backups: n/a: the tool stores nothing of its own. It reads the project it is pointed at and writes only its own log, which the project owns.
+authz: n/a: no server and no trust boundary. It runs locally, as whoever invoked it, with exactly their permissions.
