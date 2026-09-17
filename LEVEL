@@ -6,3 +6,5 @@ rollback: git revert, then re-tag. Installed copies are pinned to a version and 
 migrations: n/a: the tool owns no database and no schema.
 backups: n/a: the tool stores nothing of its own. It reads the project it is pointed at and writes only its own log, which the project owns.
 authz: n/a: no server and no trust boundary. It runs locally, as whoever invoked it, with exactly their permissions.
+logs: n/a: a command-line tool that prints its findings and exits. Its output is the log, and the caller decides where it goes.
+alerts: n/a: nothing runs unattended. The tool is invoked by a person or a build, and a non-zero exit is how it raises its hand.
