@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 876" role="img" aria-labelledby="t d" font-family="SF Mono, Menlo, Consolas, monospace" font-size="20">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 772" role="img" aria-labelledby="t d" font-family="SF Mono, Menlo, Consolas, monospace" font-size="16">
   <title id="t">claude-code-guardrails demo terminal</title>
   <desc id="d">A terminal session: command-guard blocks a recursive force-delete, lets through the one allowlisted build-cache path, and still blocks a neighbour path one directory deeper, because an allowlist entry frees one exact command, never a shape.</desc>
   <style>
@@ -8,36 +8,36 @@
     .bad { fill: #ff9494; }
     .good { fill: #7ee2a8; }
   </style>
-  <rect width="660" height="876" rx="14" fill="#0b0f14"/>
+  <rect width="660" height="772" rx="14" fill="#0b0f14"/>
   <rect width="660" height="40" rx="14" fill="#11161d"/>
   <rect y="26" width="660" height="14" fill="#11161d"/>
   <circle cx="26" cy="20" r="6" fill="#ff5f57"/>
   <circle cx="48" cy="20" r="6" fill="#febc2e"/>
   <circle cx="70" cy="20" r="6" fill="#28c840"/>
   <text x="92" y="26" class="dim" font-size="14">claude-code-guardrails</text>
-  <text x="24" y="80"><tspan class="p">$</tspan><tspan class="cmd" dx="8">printf '{&quot;tool_name&quot;:&quot;Bash&quot;,&quot;tool_input&quot;:{&quot;command&quot;:&quot;rm \</tspan></text>
-  <text x="24" y="112" class="cmd">    -rf ./src&quot;}}' | tools/command-guard.sh; echo &quot;exit $?&quot;</text>
-  <text x="24" y="144" class="bad">BLOCKED by command-guard [recursive-force-delete]: a recurs…</text>
-  <text x="24" y="176" class="dim">  command: rm -rf ./src</text>
-  <text x="24" y="208" class="dim">  instead: delete the named paths (rm path/one path/two), o…</text>
-  <text x="24" y="240" class="dim">  If this exact command is genuinely safe here, allowlist i…</text>
-  <text x="24" y="272" class="dim">  command_guard.allowlist: {&quot;rule&quot;: &quot;recursive-force-delete…</text>
-  <text x="24" y="304" class="dim">  The pattern must match the whole command, so an allowlist…</text>
-  <text x="24" y="336" class="dim">  command, never a shape.</text>
-  <text x="24" y="368" class="dim">exit 2</text>
-  <text x="24" y="400"><tspan class="p">$</tspan><tspan class="cmd" dx="8">printf '{&quot;tool_name&quot;:&quot;Bash&quot;,&quot;tool_input&quot;:{&quot;command&quot;:&quot;rm \</tspan></text>
-  <text x="24" y="432" class="cmd">    -rf ./build/cache&quot;}}' | tools/command-guard.sh; echo &quot;exit \</text>
-  <text x="24" y="464" class="cmd">    $?&quot;</text>
-  <text x="24" y="496" class="dim">exit 0</text>
-  <text x="24" y="528"><tspan class="p">$</tspan><tspan class="cmd" dx="8">printf '{&quot;tool_name&quot;:&quot;Bash&quot;,&quot;tool_input&quot;:{&quot;command&quot;:&quot;rm \</tspan></text>
-  <text x="24" y="560" class="cmd">    -rf ./build/cache/objects&quot;}}' | tools/command-guard.sh; \</text>
-  <text x="24" y="592" class="cmd">    echo &quot;exit $?&quot;</text>
-  <text x="24" y="624" class="bad">BLOCKED by command-guard [recursive-force-delete]: a recurs…</text>
-  <text x="24" y="656" class="dim">  command: rm -rf ./build/cache/objects</text>
-  <text x="24" y="688" class="dim">  instead: delete the named paths (rm path/one path/two), o…</text>
-  <text x="24" y="720" class="dim">  If this exact command is genuinely safe here, allowlist i…</text>
-  <text x="24" y="752" class="dim">  command_guard.allowlist: {&quot;rule&quot;: &quot;recursive-force-delete…</text>
-  <text x="24" y="784" class="dim">  The pattern must match the whole command, so an allowlist…</text>
-  <text x="24" y="816" class="dim">  command, never a shape.</text>
-  <text x="24" y="848" class="dim">exit 2</text>
+  <text x="24" y="72"><tspan class="p">$</tspan><tspan class="cmd" dx="8">printf '{&quot;tool_name&quot;:&quot;Bash&quot;,&quot;tool_input&quot;:{&quot;command&quot;:&quot;rm \</tspan></text>
+  <text x="24" y="100" class="cmd">    -rf ./src&quot;}}' | tools/command-guard.sh; echo &quot;exit $?&quot;</text>
+  <text x="24" y="128" class="bad">BLOCKED by command-guard [recursive-force-delete]: a recurs…</text>
+  <text x="24" y="156" class="dim">  command: rm -rf ./src</text>
+  <text x="24" y="184" class="dim">  instead: delete the named paths (rm path/one path/two), o…</text>
+  <text x="24" y="212" class="dim">  If this exact command is genuinely safe here, allowlist i…</text>
+  <text x="24" y="240" class="dim">  command_guard.allowlist: {&quot;rule&quot;: &quot;recursive-force-delete…</text>
+  <text x="24" y="268" class="dim">  The pattern must match the whole command, so an allowlist…</text>
+  <text x="24" y="296" class="dim">  command, never a shape.</text>
+  <text x="24" y="324" class="dim">exit 2</text>
+  <text x="24" y="352"><tspan class="p">$</tspan><tspan class="cmd" dx="8">printf '{&quot;tool_name&quot;:&quot;Bash&quot;,&quot;tool_input&quot;:{&quot;command&quot;:&quot;rm \</tspan></text>
+  <text x="24" y="380" class="cmd">    -rf ./build/cache&quot;}}' | tools/command-guard.sh; echo &quot;exit \</text>
+  <text x="24" y="408" class="cmd">    $?&quot;</text>
+  <text x="24" y="436" class="dim">exit 0</text>
+  <text x="24" y="464"><tspan class="p">$</tspan><tspan class="cmd" dx="8">printf '{&quot;tool_name&quot;:&quot;Bash&quot;,&quot;tool_input&quot;:{&quot;command&quot;:&quot;rm \</tspan></text>
+  <text x="24" y="492" class="cmd">    -rf ./build/cache/objects&quot;}}' | tools/command-guard.sh; \</text>
+  <text x="24" y="520" class="cmd">    echo &quot;exit $?&quot;</text>
+  <text x="24" y="548" class="bad">BLOCKED by command-guard [recursive-force-delete]: a recurs…</text>
+  <text x="24" y="576" class="dim">  command: rm -rf ./build/cache/objects</text>
+  <text x="24" y="604" class="dim">  instead: delete the named paths (rm path/one path/two), o…</text>
+  <text x="24" y="632" class="dim">  If this exact command is genuinely safe here, allowlist i…</text>
+  <text x="24" y="660" class="dim">  command_guard.allowlist: {&quot;rule&quot;: &quot;recursive-force-delete…</text>
+  <text x="24" y="688" class="dim">  The pattern must match the whole command, so an allowlist…</text>
+  <text x="24" y="716" class="dim">  command, never a shape.</text>
+  <text x="24" y="744" class="dim">exit 2</text>
 </svg>
