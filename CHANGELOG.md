@@ -14,6 +14,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 - Fixed guards going quiet on a malformed or unreadable `guardrails.json`: they still let the call through, but now print one warning naming the config path and the parse error.
+- Fixed the README opener, which counted four hooks: `guardrails.json` lists three guards, and the liveness harness is a separate check that proves they still block.
 
 ## [1.1.0](https://github.com/eliferres/claude-code-guardrails/releases/tag/v1.1.0) - 2026-09-03
 

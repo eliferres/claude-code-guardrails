@@ -1,6 +1,6 @@
 # claude-code-guardrails
 
-Four deterministic hooks for Claude Code that refuse a dangerous command, a protected write, or a colliding session before it runs, and say what to do instead. No model in the loop. The fourth guard is a liveness harness that proves the other three still block, months later.
+Three deterministic hooks for Claude Code that refuse a dangerous command, a protected write, or a colliding session before it runs, and say what to do instead. No model in the loop. A liveness harness proves the three still block, months later.
 
 Bash and Python 3.9+, nothing else.
 
@@ -38,7 +38,7 @@ into your own project root, then edit `guardrails.json`: the rules, the
 protected paths and the allowlist are all yours. The walkthrough below runs
 every guard against the fictional workspace in `demo/`, no install needed.
 
-## The four guards
+## The three guards and the liveness harness
 
 **Command guard.** A PreToolUse hook on Bash. It matches the command against a
 list of shapes you configure (recursive force-delete, blanket `git add -A`,
