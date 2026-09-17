@@ -77,11 +77,14 @@ def state_dir() -> str:
 
 def guard_config(section: str) -> Dict[str, Any]:
     """Guards fail OPEN on a missing or broken config: a config typo must never brick
-    the harness. `liveness` is the piece that notices a guard has stopped guarding."""
+    the harness. `liveness` is the piece that notices a guard has stopped guarding.
+    The warning keeps that fail-open visible to whoever reads the hook output."""
     try:
         with open(config_path()) as handle:
             return json.load(handle).get(section) or {}
-    except Exception:
+    except Exception as error:
+        sys.stderr.write("guardrails: warning: cannot read %s (%s); letting the call through\n"
+                         % (config_path(), error))
         sys.exit(0)
 
 

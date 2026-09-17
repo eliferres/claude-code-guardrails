@@ -153,5 +153,15 @@ if [ "$RC" -ne 0 ] && has "proves nothing" "$OUT"; then
 else bad "14 liveness goes red when a red case passes without the guard" "exit $RC: $OUT"; fi
 rm -r "$K"
 
+# ---------------------------------------------------------------- broken config
+
+P="$(make_project)"
+printf '{"command_guard": {"rules": [' > "$P/guardrails.json"
+OUT="$(run_cmd "rm -rf ./build")"; RC=$?
+if [ "$RC" -eq 0 ] && has "warning" "$OUT" && has "$P/guardrails.json" "$OUT" && has "Expecting" "$OUT"; then
+  ok "15 a malformed config fails open, but warns with its path and the parse error"
+else bad "15 a malformed config fails open with a warning" "exit $RC: $OUT"; fi
+rm -r "$P"
+
 printf '\n%d passed, %d failed\n' "$PASSED" "$FAILED"
 [ "$FAILED" -eq 0 ]
