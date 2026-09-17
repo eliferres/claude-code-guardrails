@@ -116,8 +116,7 @@ export GUARDRAILS_PROJECT_DIR="$PWD/demo"
 **Try a blocked command.**
 
 ```bash
-printf '{"tool_name":"Bash","tool_input":{"command":"rm -rf ./src"}}' | tools/command-guard.sh
-echo "exit $?"
+printf '{"tool_name":"Bash","tool_input":{"command":"rm -rf ./src"}}' | tools/command-guard.sh; echo "exit $?"
 ```
 
 ```
@@ -138,10 +137,8 @@ and the neighbour path is still refused, because an allowlist entry is a whole
 anchored command, not a pattern:
 
 ```bash
-printf '{"tool_name":"Bash","tool_input":{"command":"rm -rf ./build/cache"}}' | tools/command-guard.sh
-echo "exit $?"   # 0
-printf '{"tool_name":"Bash","tool_input":{"command":"rm -rf ./build/cache/objects"}}' | tools/command-guard.sh
-echo "exit $?"   # 2
+printf '{"tool_name":"Bash","tool_input":{"command":"rm -rf ./build/cache"}}' | tools/command-guard.sh; echo "exit $?"
+printf '{"tool_name":"Bash","tool_input":{"command":"rm -rf ./build/cache/objects"}}' | tools/command-guard.sh; echo "exit $?"
 ```
 
 **Write to a protected file, get refused, mint a token, succeed.**
