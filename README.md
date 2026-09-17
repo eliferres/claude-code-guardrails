@@ -31,7 +31,9 @@ Installed, each script in `tools/` is a subcommand of one command:
 `claims-takeover` and `liveness`). It reads `guardrails.json` from
 `$GUARDRAILS_PROJECT_DIR`, then `$CLAUDE_PROJECT_DIR`, then the current
 directory. `liveness` also needs the kit's `tools/` and `tests/`, so run it
-inside a clone.
+inside a clone. An editable install (`pip install -e`) is the exception: the
+module still sits in the checkout, so it reads that checkout's `guardrails.json`
+and runs liveness against that kit, wherever you call it from.
 
 To put the kit in a project without installing anything, copy `tools/`,
 `guardrails.json` and `demo/.claude/settings.json` into your project root, then
