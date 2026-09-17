@@ -12,6 +12,7 @@ Versions match the git tags.
 - Renamed `tools/guardrails.py` to `tools/claude_code_guardrails.py`, so an install cannot shadow the `guardrails` package from guardrails-ai.
 
 ### Fixed
+- Fixed every hint and usage line naming a `tools/*.sh` script, which an installed user's project does not have: run from a clone they still name the script you ran, and run as the installed command they say `claude-code-guardrails lock-approve` and so on.
 - Fixed guards going quiet on a malformed or unreadable `guardrails.json`: they still let the call through, but now print one warning naming the config path and the parse error.
 - Fixed `demo/transcript.json`, which recorded exit code 1 for two commands that exit 0 and had an `exit` line typed into their output; it is now regenerated from a real run, and a test replays every entry and checks every row of the demo image against it.
 - Fixed the README opener, which counted four hooks: `guardrails.json` lists three guards, and the liveness harness is a separate check that proves they still block.

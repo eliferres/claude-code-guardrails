@@ -49,6 +49,28 @@ def kit_root() -> str:
 KIT_ROOT = kit_root()
 DENY = 2
 
+# Each tools/*.sh wrapper exports its own $0, so a clone keeps naming the script the
+# reader ran; installed there is no wrapper, and the console script's own name is the
+# only thing they can type.
+PROG = os.environ.get("GUARDRAILS_PROG") or os.path.basename(sys.argv[0])
+
+JOB_SCRIPTS = {
+    "command-guard": "command-guard.sh",
+    "file-lock": "file-lock-guard.sh",
+    "lock-approve": "lock-approve.sh",
+    "claims-guard": "claims-guard.sh",
+    "claims-clear": "claims-clear.sh",
+    "claims-takeover": "claims-takeover.sh",
+    "liveness": "liveness.sh",
+}
+
+
+def invocation(job: str) -> str:
+    """How to run one of the seven jobs, in the form the reader themself used."""
+    if os.environ.get("GUARDRAILS_PROG"):
+        return os.path.join(os.path.dirname(PROG), JOB_SCRIPTS[job])
+    return "%s %s" % (PROG, job)
+
 
 # ---------------------------------------------------------------- config + paths
 
@@ -83,8 +105,8 @@ def guard_config(section: str) -> Dict[str, Any]:
         with open(config_path()) as handle:
             return json.load(handle).get(section) or {}
     except Exception as error:
-        sys.stderr.write("guardrails: warning: cannot read %s (%s); letting the call through\n"
-                         % (config_path(), error))
+        sys.stderr.write("%s: warning: cannot read %s (%s); letting the call through\n"
+                         % (PROG, config_path(), error))
         sys.exit(0)
 
 
@@ -98,7 +120,7 @@ def cli_config(section: str) -> Dict[str, Any]:
 
 
 def die(message: str) -> NoReturn:
-    sys.stderr.write("guardrails: %s\n" % message)
+    sys.stderr.write("%s: %s\n" % (PROG, message))
     sys.exit(1)
 
 
@@ -196,7 +218,7 @@ def token_covers(path: str, covered: List[str]) -> bool:
 
 
 def mint_hint(path: str) -> str:
-    return 'tools/lock-approve.sh "<batch label>" "%s"' % path
+    return '%s "<batch label>" "%s"' % (invocation("lock-approve"), path)
 
 
 def file_lock() -> None:
@@ -233,7 +255,8 @@ def file_lock() -> None:
 
 def lock_approve(argv: List[str]) -> None:
     if len(argv) < 2:
-        die('usage: lock-approve.sh "<batch label>" <path> [more paths...]\n'
+        die('usage: %s "<batch label>" <path> [more paths...]\n'
+            % invocation("lock-approve") +
             "        a token must name every file it approves — no files, no token")
     label, paths = argv[0], argv[1:]
     ttl = int(cli_config("file_lock").get("token_ttl_seconds", 1800))
@@ -318,11 +341,13 @@ def claims_guard() -> None:
             "  holder: %s (claimed %d minutes ago)\n"
             "  Two sessions editing one file means the second write silently eats the first.\n"
             "  If that session is finished, release the claim:\n"
-            '    tools/claims-clear.sh --session "%s" "%s"\n'
+            '    %s --session "%s" "%s"\n'
             "  If your work outranks theirs, take it over — logged, and what they were holding\n"
             "  is written to the takeover ledger so it can be picked up rather than lost:\n"
-            '    tools/claims-takeover.sh "%s" "<why yours wins>"'
-            % (path, holder, int((time.time() - float(held_at)) // 60), holder, path, path))
+            '    %s "%s" "<why yours wins>"'
+            % (path, holder, int((time.time() - float(held_at)) // 60),
+               invocation("claims-clear"), holder, path,
+               invocation("claims-takeover"), path))
 
     rows = [row for row in rows if not (row[1] == mine and row[2] == path)]
     rows.append(["%.0f" % time.time(), mine, path])
@@ -348,7 +373,7 @@ def claims_clear(argv: List[str]) -> None:
         except Exception:
             who = ""
     if not who:
-        die('usage: claims-clear.sh [--session <id>] [path...]\n'
+        die('usage: %s [--session <id>] [path...]\n' % invocation("claims-clear") +
             "        with no --session, the id comes from GUARDRAILS_SESSION_ID or a hook payload")
 
     config = cli_config("claims")
@@ -361,7 +386,7 @@ def claims_clear(argv: List[str]) -> None:
 
 def claims_takeover(argv: List[str]) -> None:
     if len(argv) < 2:
-        die('usage: claims-takeover.sh <path> "<one-line reason>"\n'
+        die('usage: %s <path> "<one-line reason>"\n' % invocation("claims-takeover") +
             "        the reason is the ledger entry a human reads later")
     path = os.path.realpath(os.path.expanduser(argv[0]))
     reason = argv[1]
@@ -475,8 +500,8 @@ def liveness(argv: List[str]) -> int:
     needed = ("guardrails.json", "tools", os.path.join("tests", "noop-guard.sh"))
     missing = [name for name in needed if not os.path.exists(os.path.join(KIT_ROOT, name))]
     if missing:
-        sys.stderr.write("liveness: %s has no %s; run it inside a kit checkout\n"
-                         % (KIT_ROOT, ", ".join(missing)))
+        sys.stderr.write("%s: %s has no %s; run it inside a kit checkout\n"
+                         % (PROG, KIT_ROOT, ", ".join(missing)))
         return DENY
     manifest_path = os.path.join(KIT_ROOT, "guardrails.json")
     manifest, error = _read_manifest(manifest_path)
@@ -517,8 +542,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         print("claude-code-guardrails %s" % __version__)
         sys.exit(0)
     if not args or args[0] not in COMMANDS:
-        die("usage: %s <%s> [args]"
-            % (os.path.basename(sys.argv[0]), "|".join(sorted(COMMANDS))))
+        die("usage: %s <%s> [args]" % (PROG, "|".join(sorted(COMMANDS))))
     sys.exit(COMMANDS[args[0]](args[1:]) or 0)
 
 
