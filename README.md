@@ -50,6 +50,16 @@ curl-piped-into-a-shell, `git reset --hard`, `git clean -f`) and refuses with
 the shape it caught and the safe way to do the same job. One exact command can
 be allowlisted; a shape cannot.
 
+| Rule | Refuses | Why |
+| --- | --- | --- |
+| `recursive-force-delete` | `rm -rf` and its flag spellings | removes a tree with no confirmation and no undo |
+| `blanket-git-stage` | `git add -A`, `git add .` | sweeps up secrets, local state files and unrelated edits |
+| `wide-chmod` | `chmod -R`, `777`, `666`, `a+w`, `o+w` | quietly opens up every file under a tree |
+| `force-push-protected` | `git push --force` naming `main` or `master` | rewrites history other people have already pulled |
+| `curl-pipe-to-shell` | `curl` or `wget` piped into a shell | executes code nobody read |
+| `git-reset-hard` | `git reset --hard` | throws away uncommitted work with no recovery path |
+| `git-clean-force` | `git clean -f` | deletes untracked files git never had a copy of |
+
 **Protected-file lock.** A PreToolUse hook on writes. Files you list as
 high-stakes (settings, hook scripts, the rules the agent reads every session)
 are refused unless an approval token names them. The token covers one batch,
