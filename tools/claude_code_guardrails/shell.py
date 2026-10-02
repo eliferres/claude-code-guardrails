@@ -207,8 +207,18 @@ def operands(args: List[str]) -> List[str]:
     return [arg for arg in args if not arg.startswith("-") or arg == "-"]
 
 
+# Words after which a cd may or may not have run, or run somewhere this reading
+# cannot see: a brace group or a branch hides it, eval and source run text the
+# guard never parsed. Each one leaves the folder unknown.
+FOLDER_HIDING_WORDS = {
+    "{", "}", "if", "then", "else", "elif", "fi", "do", "done", "while", "until",
+    "for", "case", "esac", "select", "function", "!", "[[", "eval", "source", ".",
+    "pushd", "popd",
+}
+
+
 def folder_after(name: str, args: List[str], cwd: Optional[str], unreadable: FrozenSet[str]) -> Optional[str]:
-    if name in ("pushd", "popd"):
+    if name in FOLDER_HIDING_WORDS:
         return None
     if name != "cd":
         return cwd

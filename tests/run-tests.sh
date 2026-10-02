@@ -171,6 +171,14 @@ every_exit() {
 every_exit 2 "35 a target carrying a zsh glob qualifier keeps the refusal" \
   "mkdir -p /tmp/gr-q/w && rm -rf /tmp/gr-q/w(:h:h:h)" \
   "rm -rf /tmp/gr-q/w(:h:h:h)"
+
+# A cd inside a brace group, an if, or run through eval or source still moves
+# the shell, so after one the guard no longer knows the folder.
+every_exit 2 "36 a cd the guard cannot follow leaves the folder unknown" \
+  "cd /tmp && { cd ~; }; rm -rf build" \
+  "cd /tmp && if true; then cd ~; fi; rm -rf zz" \
+  "cd /tmp && eval cd ~ && rm -rf zz" \
+  "cd /tmp && . ./elsewhere.sh && rm -rf zz"
 rm -r "$P"
 
 # ---------------------------------------------------------------- protected-file lock
