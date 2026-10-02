@@ -55,6 +55,9 @@
     ],
     "token_ttl_seconds": 1800
   },
+  "decision_log": {
+    "sample_allow_every": 10
+  },
   "syntax_check": {
     "paths": ["*.sh", "*.bash", ".claude/hooks/*", "tools/*"]
   },

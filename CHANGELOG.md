@@ -10,6 +10,7 @@ Versions match the git tags.
 - Added temp-safe deletes: a recursive `rm` whose every path resolves inside `$TMPDIR`, `/tmp` or `/var/tmp` passes, switched on per rule with `"allow_in_temp": true` and on in the shipped recursive-delete rule.
 - Added the syntax guard (`tools/syntax-guard.sh`, `claude-code-guardrails syntax-guard`): a Write or Edit that would leave a shell or Python file unparseable is refused before it lands, including Python embedded in a shell file, where an apostrophe in a single-quoted `python3 -c` body passes `bash -n` and runs cut off.
 - Added an optional git pre-push secret scan (`tools/pre-push-secret-scan.sh`, `claude-code-guardrails secret-scan`): a push whose commits add a vendor-prefixed key, a private key block or a generic `name = secret` literal is refused, naming the file and shape but never the value; fixture paths go in `.secret-scan-allow`.
+- Added a decision log: every refusal by a guard is appended to `.guardrails/decisions.jsonl` with its rule id and subject, and one allowed call in `decision_log.sample_allow_every` (default 10) is logged too, so a rule that only ever fires on safe commands can be found and retired.
 - Added `pyproject.toml`, so `pipx install git+https://github.com/eliferres/claude-code-guardrails` installs a `claude-code-guardrails` command with `--version` and the seven existing jobs as subcommands.
 
 ### Changed

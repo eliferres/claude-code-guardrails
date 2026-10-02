@@ -29,6 +29,7 @@ import glob
 import hashlib
 import json
 import os
+import random
 import re
 import shlex
 import subprocess
@@ -137,16 +138,51 @@ def die(message: str) -> NoReturn:
     sys.exit(1)
 
 
-def deny(message: str) -> NoReturn:
+# The guard running and the payload it read, for the decision log.
+RUN: Dict[str, Any] = {"guard": "", "payload": {}}
+# One allowed call in this many is logged unless the config says otherwise: at a
+# few hundred tool calls a day that is enough rows to see each guard's traffic
+# within a day or two, and the log stays small. 0 turns sampling off.
+DEFAULT_SAMPLE_ALLOW_EVERY = 10
+
+
+def deny(message: str, rule: str) -> NoReturn:
+    log_decision("deny", rule)
     sys.stderr.write(message + "\n")
     sys.exit(DENY)
 
 
 def hook_input() -> Dict[str, Any]:
     try:
-        return json.loads(sys.stdin.read() or "{}")
+        payload = json.loads(sys.stdin.read() or "{}")
     except Exception:
         sys.exit(0)
+    RUN["payload"] = payload
+    return payload
+
+
+def log_decision(decision: str, rule: Optional[str]) -> None:
+    """One row in .guardrails/decisions.jsonl. Logging never changes a verdict, so
+    any error writing the row is ignored."""
+    try:
+        tool_input = RUN["payload"].get("tool_input") or {}
+        subject = (tool_input.get("command") or tool_input.get("file_path")
+                   or tool_input.get("notebook_path") or "")
+        row = {"ts": int(time.time()), "guard": RUN["guard"], "decision": decision,
+               "rule": rule, "subject": " ".join(str(subject).split())[:300]}
+        with open(os.path.join(state_dir(), "decisions.jsonl"), "a") as log:
+            log.write(json.dumps(row) + "\n")
+    except Exception:
+        pass
+
+
+def sample_allow_every() -> int:
+    try:
+        with open(config_path()) as handle:
+            section = json.load(handle).get("decision_log") or {}
+        return int(section.get("sample_allow_every", DEFAULT_SAMPLE_ALLOW_EVERY))
+    except Exception:
+        return DEFAULT_SAMPLE_ALLOW_EVERY
 
 
 def target_path(payload: Dict[str, Any]) -> str:
@@ -493,7 +529,7 @@ def shell_write_check(command: str, flat: str, cwd: Optional[str]) -> None:
                 "  command: %s\n"
                 "  instead: make the change with the Write or Edit tool, where the file lock asks\n"
                 "  for an approval token; a shell write would go around that check."
-                % (path, pattern, config_path(), flat))
+                % (path, pattern, config_path(), flat), "shell-write-protected")
 
 
 def safe_temp_delete(command: str, cwd: Optional[str]) -> bool:
@@ -533,7 +569,8 @@ def command_guard() -> None:
             "  command_guard.allowlist: {\"rule\": \"%s\", \"command\": \"^...$\", \"why\": \"...\"}.\n"
             "  The pattern must match the whole command, so an allowlist entry frees one\n"
             "  command, never a shape."
-            % (rule["id"], rule["blocks"], flat, rule["instead"], config_path(), rule["id"]))
+            % (rule["id"], rule["blocks"], flat, rule["instead"], config_path(), rule["id"]),
+            rule["id"])
     shell_write_check(command, flat, cwd)
     sys.exit(0)
 
@@ -597,17 +634,17 @@ def file_lock() -> None:
              "  There is no approval token. Once a human has approved this change, mint one:\n"
              "    %s\n"
              "  A token names the files it covers and expires after %d minutes."
-             % (mint_hint(path), minutes))
+             % (mint_hint(path), minutes), "no-token")
     batch, expires, covered = token
     if time.time() >= expires:
         deny(head + '  The token for batch "%s" expired %d minutes ago. Mint a fresh one:\n    %s'
-             % (batch, int((time.time() - expires) // 60), mint_hint(path)))
+             % (batch, int((time.time() - expires) // 60), mint_hint(path)), "expired-token")
     if not token_covers(path, covered):
         deny(head + '  The open token for batch "%s" does not cover this file. It covers:\n%s\n'
              "  Approval is per batch, so a live token from other work is not a yes for this\n"
              "  one. Mint a token that names this file:\n    %s"
              % (batch, "\n".join("    " + item for item in covered) or "    (nothing)",
-                mint_hint(path)))
+                mint_hint(path)), "token-does-not-cover")
     sys.exit(0)
 
 
@@ -817,7 +854,7 @@ def syntax_guard() -> None:
              "  %s\n"
              "  instead: make the change so the whole file parses after it. A hook that does not\n"
              "  parse fails on every call that runs it, including the call that would fix it."
-             % (payload.get("tool_name"), path, problem))
+             % (payload.get("tool_name"), path, problem), "unparseable")
     sys.exit(0)
 
 
@@ -1002,7 +1039,7 @@ def claims_guard() -> None:
             '    %s "%s" "<why yours wins>"'
             % (path, holder, int((time.time() - float(held_at)) // 60),
                invocation("claims-clear"), holder, path,
-               invocation("claims-takeover"), path))
+               invocation("claims-takeover"), path), "claimed-by-another-session")
 
     rows = [row for row in rows if not (row[1] == mine and row[2] == path)]
     rows.append(["%.0f" % time.time(), mine, path])
@@ -1193,6 +1230,24 @@ COMMANDS = {
 }
 
 
+GUARDS = ("command-guard", "file-lock", "syntax-guard", "claims-guard")
+
+
+def run_guard(job: str, argv: List[str]) -> NoReturn:
+    """Runs a guard and logs one allowed call in N. Refusals log themselves in deny()."""
+    RUN["guard"] = job
+    try:
+        COMMANDS[job](argv)
+        code: Any = 0
+    except SystemExit as done:
+        code = done.code
+    if code in (0, None):
+        every = sample_allow_every()
+        if every > 0 and random.randrange(every) == 0:
+            log_decision("allow", None)
+    sys.exit(code)
+
+
 def main(argv: Optional[List[str]] = None) -> None:
     args = sys.argv[1:] if argv is None else argv
     if args[:1] == ["--version"]:
@@ -1200,6 +1255,8 @@ def main(argv: Optional[List[str]] = None) -> None:
         sys.exit(0)
     if not args or args[0] not in COMMANDS:
         die("usage: %s <%s> [args]" % (PROG, "|".join(sorted(COMMANDS))))
+    if args[0] in GUARDS:
+        run_guard(args[0], args[1:])
     sys.exit(COMMANDS[args[0]](args[1:]) or 0)
 
 

@@ -306,6 +306,40 @@ if [ "$RC" -ne 0 ] && has "generic-secret" "$OUT" && [ "$RC2" -eq 0 ]; then
 else bad "32 the generic key=value shape" "exit $RC/$RC2: $OUT $OUT2"; fi
 rm -r "$G"
 
+# ---------------------------------------------------------------- decision log
+
+P="$(make_project)"
+LOG="$P/.guardrails/decisions.jsonl"
+set_sampling() {
+  python3 - "$P/guardrails.json" "$1" <<'PY'
+import json, sys
+path, every = sys.argv[1], int(sys.argv[2])
+config = json.load(open(path))
+config["decision_log"] = {"sample_allow_every": every}
+json.dump(config, open(path, "w"), indent=2)
+PY
+}
+set_sampling 0
+run_in "git add -A" >/dev/null
+write_payload "$P/rules/team-rules.md" | GUARDRAILS_PROJECT_DIR="$P" bash "$LOCK_GUARD" >/dev/null 2>&1
+run_in "ls -la" >/dev/null
+ROWS="$(cat "$LOG" 2>&1)"
+if has '"guard": "command-guard", "decision": "deny", "rule": "blanket-git-stage", "subject": "git add -A"' "$ROWS" \
+   && has '"guard": "file-lock", "decision": "deny", "rule": "no-token"' "$ROWS" \
+   && [ "$(grep -c '"allow"' "$LOG")" -eq 0 ]; then
+  ok "33 every refusal is logged with its guard, rule and subject; with sampling off, no allow is"
+else bad "33 refusals are logged" "$ROWS"; fi
+
+set_sampling 1
+run_in "ls -la" >/dev/null
+content_payload "$P/notes/todo.txt" "hello" | GUARDRAILS_PROJECT_DIR="$P" bash "$SYNTAX_GUARD" >/dev/null 2>&1
+ROWS="$(cat "$LOG" 2>&1)"
+if has '"guard": "command-guard", "decision": "allow", "rule": null, "subject": "ls -la"' "$ROWS" \
+   && has '"guard": "syntax-guard", "decision": "allow"' "$ROWS"; then
+  ok "34 one allowed call in N is logged, so a rule's refusals can be read against the traffic it sees"
+else bad "34 allowed calls are sampled" "$ROWS"; fi
+rm -r "$P"
+
 # ---------------------------------------------------------------- liveness harness
 
 kit_copy() {

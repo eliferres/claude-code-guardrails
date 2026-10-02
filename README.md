@@ -114,6 +114,34 @@ blocking, or if a red case still passes with the guard stubbed out. That last
 check is the point: a test that passes without the guard was never testing the
 guard.
 
+## The decision log: retiring a noisy rule
+
+Liveness proves a rule still fires; the decision log tells you whether it
+should. Every refusal is appended to `.guardrails/decisions.jsonl` with its
+guard, rule id and the command or path, and one allowed call in
+`decision_log.sample_allow_every` (default 10, `0` turns it off) is logged too,
+so each guard's traffic can be estimated without logging all of it:
+
+```bash
+python3 - <<'PY'
+import collections, json
+every = 10  # decision_log.sample_allow_every
+rows = [json.loads(line) for line in open(".guardrails/decisions.jsonl")]
+calls = collections.Counter(r["guard"] for r in rows if r["decision"] == "allow")
+denies = collections.Counter((r["guard"], r["rule"]) for r in rows if r["decision"] == "deny")
+for (guard, rule), count in denies.most_common():
+    seen = calls[guard] * every + sum(n for (g, _), n in denies.items() if g == guard)
+    print("%-14s %-26s %5d refusals, %.1f%% of its calls" % (guard, rule, count, 100.0 * count / seen))
+PY
+grep '"rule": "wide-chmod"' .guardrails/decisions.jsonl   # then read what one rule refused
+```
+
+A rule that fires often and whose refusals are all safe commands is costing more
+than it protects: narrow its pattern, allowlist the exact commands, or delete
+it. In the setup these guards came from, two rules were retired that way after
+259 and 466 refusals in six days, none of them a real catch. The log holds the
+commands as typed, so it stays in the git-ignored `.guardrails/` folder.
+
 ## Wiring it into Claude Code
 
 This is the whole install, copied from `demo/.claude/settings.json` (that file
@@ -330,5 +358,5 @@ are blocked, it is that you can still prove, months later, that they are.
 - `tests/demo-transcript.sh`: replays `demo/transcript.json` and checks the image against it.
 
 State lives in `.guardrails/` inside the project: the approval token, the claims
-registry, the takeover ledger and the approval log. It is git-ignored: these
-are local facts about one machine's live sessions.
+registry, the takeover ledger, the approval log and the decision log. It is
+git-ignored: these are local facts about one machine's live sessions.
