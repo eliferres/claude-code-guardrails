@@ -4,7 +4,10 @@ Four deterministic guards for Claude Code that refuse a dangerous command, a pro
 
 Bash and Python 3.9+, nothing else.
 
-![ci](https://github.com/eliferres/claude-code-guardrails/actions/workflows/ci.yml/badge.svg)
+[![ci](https://github.com/eliferres/claude-code-guardrails/actions/workflows/ci.yml/badge.svg)](https://github.com/eliferres/claude-code-guardrails/actions/workflows/ci.yml)
+![license](https://img.shields.io/badge/license-MIT-blue.svg)
+![python](https://img.shields.io/badge/python-3.9%2B-blue.svg)
+![dependencies](https://img.shields.io/badge/dependencies-none-brightgreen.svg)
 
 <img src="demo/terminal.svg" width="660" alt="Terminal session showing command-guard blocking a recursive force-delete, allowing the one allowlisted build-cache path, and still blocking a neighbour path one directory deeper.">
 
