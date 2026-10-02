@@ -28,7 +28,7 @@ bash tests/run-tests.sh    # the full suite, hermetic, no network
 Installed, each script in `tools/` is a subcommand of one command:
 `claude-code-guardrails command-guard` does what `tools/command-guard.sh` does
 (the others are `file-lock`, `lock-approve`, `claims-guard`, `claims-clear`,
-`claims-takeover`, `syntax-guard` and `liveness`). It reads `guardrails.json` from
+`claims-takeover`, `syntax-guard`, `secret-scan` and `liveness`). It reads `guardrails.json` from
 `$GUARDRAILS_PROJECT_DIR`, then `$CLAUDE_PROJECT_DIR`, then the current
 directory. `liveness` also needs the kit's `tools/` and `tests/`, so run it
 inside a clone. An editable install (`pip install -e`) is the exception: the
@@ -152,6 +152,32 @@ is the source of truth):
 Guards deny by exiting 2 with the reason on stderr: the PreToolUse contract
 that cancels the tool call and hands the text back to the agent. Everything they
 do not block exits 0 and is never seen again.
+
+## Secret scan before a push
+
+An optional git pre-push hook, separate from the agent guards: it reads every
+line each pushed commit adds and refuses the push when one looks like a
+credential, naming the file, the shape and the commit, never the value. Each
+commit is read on its own, so a key added and then deleted before the push is
+still caught; it would still be in the published history. Install it per
+repository from a clone of this kit, or point it at the installed command:
+
+```bash
+ln -s /path/to/claude-code-guardrails/tools/pre-push-secret-scan.sh .git/hooks/pre-push
+# or, installed:
+printf '#!/bin/sh\nexec claude-code-guardrails secret-scan "$@"\n' > .git/hooks/pre-push && chmod +x .git/hooks/pre-push
+```
+
+The shapes follow the public gitleaks rules, kept to ones with a fixed vendor
+prefix or frame so a hit is almost never wrong: `aws-access-key`, `github-token`,
+`gitlab-token`, `slack-token`, `stripe-key`, `anthropic-key`, `openai-key`,
+`google-api-key`, `npm-token` and `private-key`. One looser shape,
+`generic-secret`, catches a name like `api_key` or `password` assigned a literal
+of 16 or more characters mixing letters and digits; it is the one most likely to
+fire on a test fixture. Paths listed in `.secret-scan-allow` at the top of the
+repository (one glob per line, `#` for comments) are skipped, which is where
+fake keys in fixtures belong. There is no override flag: a real key gets taken
+out of the commits, not waved through.
 
 ## Walkthrough
 
@@ -295,6 +321,7 @@ are blocked, it is that you can still prove, months later, that they are.
 - `tools/claims-clear.sh`: releases claims; wire it to SessionEnd.
 - `tools/claims-takeover.sh`: takes a claim and ledgers what it displaced.
 - `tools/liveness.sh`: proves every guard in the manifest still goes red.
+- `tools/pre-push-secret-scan.sh`: optional git pre-push hook, refuses a push that adds a credential.
 - `tools/claude_code_guardrails.py`: the implementation every shim calls. Stdlib only.
 - `guardrails.json`: one config, holding the rules, allowlist, protected paths, claims and manifest.
 - `demo/`: a fictional workspace and the hook wiring, for the walkthrough.

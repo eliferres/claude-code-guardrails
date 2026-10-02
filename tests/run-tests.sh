@@ -256,6 +256,56 @@ if [ "$SYNTAX_OK" -eq 1 ] && [ "$RC" -eq 2 ] && has "Edit would leave" "$OUT"; t
 elif [ "$SYNTAX_OK" -eq 1 ]; then bad "29 an Edit that breaks the file is refused" "exit $RC: $OUT"; fi
 rm -r "$P"
 
+# ---------------------------------------------------------------- pre-push secret scan
+
+# A real repository pushing to a real bare remote, with the scan as its
+# pre-push hook. Repository config outranks any global hook path or signing
+# setting. Every fake key is assembled here at run time, so no key-shaped
+# line is ever in this tree.
+G="$(mktemp -d "${TMPDIR:-/tmp}/guardrails-git.XXXXXX")"
+gitq() { git -C "$G/work" "$@"; }
+git init -q --bare "$G/remote.git"
+git init -q "$G/work"
+mkdir -p "$G/hooks" "$G/work/tests/fixtures"
+ln -s "$ROOT/tools/pre-push-secret-scan.sh" "$G/hooks/pre-push"
+gitq config user.name test && gitq config user.email test@example.com && gitq config commit.gpgsign false
+gitq config core.hooksPath "$G/hooks" && gitq remote add origin "$G/remote.git"
+push() { gitq push -q origin HEAD:refs/heads/main 2>&1; }
+commit() { gitq add -- "$1" && gitq commit -q -m "$2"; }
+
+printf 'print("hello")\n' > "$G/work/app.py"; commit app.py "clean start"
+OUT="$(push)"; CLEAN_RC=$?
+AWS_KEY="AKIA""$(printf 'Q%.0s' 1 2 3 4)7XWZ2MPLE3AB"
+printf 'AWS_ACCESS_KEY_ID = "%s"\n' "$AWS_KEY" > "$G/work/settings.py"; commit settings.py "add settings"
+printf 'print("hello")\n' > "$G/work/settings.py"; commit settings.py "drop the key again"
+OUT="$(push)"; RC=$?
+if [ "$CLEAN_RC" -eq 0 ] && [ "$RC" -ne 0 ] && has "settings.py" "$OUT" && has "aws-access-key" "$OUT" \
+   && ! has "$AWS_KEY" "$OUT"; then
+  ok "30 a push adding a key is refused, naming the file and shape, never the value, even if a later commit removed it"
+else bad "30 a push adding a key is refused" "clean $CLEAN_RC, exit $RC: $OUT"; fi
+
+gitq reset -q --hard HEAD~2
+PEM_HEAD="-----BEGIN ""RSA PRIVATE KEY-----"
+printf '%s\nMIIEowIBAAKCAQEA\n' "$PEM_HEAD" > "$G/work/tests/fixtures/server.pem"; commit tests/fixtures/server.pem "add a fixture key"
+OUT="$(push)"; RC=$?
+printf '# fixtures hold fake keys on purpose\ntests/fixtures/*\n' > "$G/work/.secret-scan-allow"; commit .secret-scan-allow "allow the fixtures"
+OUT2="$(push)"; RC2=$?
+if [ "$RC" -ne 0 ] && has "private-key" "$OUT" && [ "$RC2" -eq 0 ]; then
+  ok "31 a fixture path listed in .secret-scan-allow is skipped; unlisted, the same key is refused"
+else bad "31 the allow-path file skips fixtures" "exit $RC/$RC2: $OUT $OUT2"; fi
+
+TOKEN_VALUE="Zx81""Qm42Lp07Rt55Vw"
+printf 'api_key: "%s"\nendpoint: "https://example.com"\npassword: "${DB_PASSWORD}"\n' "$TOKEN_VALUE" > "$G/work/config.yml"
+commit config.yml "add config"
+OUT="$(push)"; RC=$?
+gitq reset -q --hard HEAD~1
+printf 'password: "${DB_PASSWORD}"\napi_key: "your-api-key-here"\n' > "$G/work/config.yml"; commit config.yml "add config template"
+OUT2="$(push)"; RC2=$?
+if [ "$RC" -ne 0 ] && has "generic-secret" "$OUT" && [ "$RC2" -eq 0 ]; then
+  ok "32 a generic key=value secret is refused; a variable reference or a placeholder is not"
+else bad "32 the generic key=value shape" "exit $RC/$RC2: $OUT $OUT2"; fi
+rm -r "$G"
+
 # ---------------------------------------------------------------- liveness harness
 
 kit_copy() {
