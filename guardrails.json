@@ -69,7 +69,8 @@
       "red_tests": [
         "tests/red/command-guard-recursive-delete.sh",
         "tests/red/command-guard-blanket-stage.sh",
-        "tests/red/command-guard-curl-pipe-shell.sh"
+        "tests/red/command-guard-curl-pipe-shell.sh",
+        "tests/red/command-guard-shell-write.sh"
       ]
     },
     {

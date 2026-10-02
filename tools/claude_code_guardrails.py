@@ -156,13 +156,234 @@ def matched_pattern(path: str, patterns: List[str], root: str) -> Optional[str]:
     return None
 
 
+# ---------------------------------------------------------------- reading a shell command
+
+# A heredoc body is data for the command that reads it, not more commands: a body
+# line such as `> rules/x.md` must not read as a redirect. `<<<` is a here-string.
+HEREDOC = re.compile(r"(?<!<)<<(?!<)-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1")
+REDIRECT = re.compile(r"[0-9]*(?:&>>|&>|>>|>\||>&|>|<<<|<<-|<<|<&|<>|<)")
+OPERATORS = ("&&", "||", "|&", ";;", ";", "|", "&", "(", ")", "`", "\n")
+HOME = os.path.expanduser("~")
+
+Command = Tuple[List[str], List[Tuple[str, str]]]
+
+
+def strip_heredoc_bodies(command: str) -> str:
+    kept, pending = [], []
+    for line in command.split("\n"):
+        if pending:
+            if line.strip() == pending[0]:
+                pending.pop(0)
+            continue
+        kept.append(line)
+        pending.extend(match.group(2) for match in HEREDOC.finditer(line))
+    return "\n".join(kept)
+
+
+def shell_tokens(command: str) -> List[Tuple[str, str]]:
+    """Split a command into ("word" | "op" | "redirect", text) the way the shell
+    would: quotes and backslashes removed from words, operators and redirects kept
+    apart even when written without spaces (`echo x>f`). Raises ValueError on an
+    unclosed quote. `$(` opens a group like `(`, so a substitution's inner command
+    is read as a command of its own."""
+    tokens: List[Tuple[str, str]] = []
+    word: List[str] = []
+    in_word = False
+
+    def flush() -> None:
+        nonlocal word, in_word
+        if in_word:
+            tokens.append(("word", "".join(word)))
+        word, in_word = [], False
+
+    i, n = 0, len(command)
+    while i < n:
+        c = command[i]
+        if c in " \t\r":
+            flush()
+            i += 1
+        elif c == "\\":
+            if command.startswith("\\\n", i):
+                i += 2
+                continue
+            word.append(command[i + 1:i + 2])
+            in_word = True
+            i += 2
+        elif c == "'":
+            end = command.find("'", i + 1)
+            if end < 0:
+                raise ValueError("unclosed single quote")
+            word.append(command[i + 1:end])
+            in_word = True
+            i = end + 1
+        elif c == '"':
+            i += 1
+            while i < n and command[i] != '"':
+                if command[i] == "\\" and i + 1 < n and command[i + 1] in '"\\$`':
+                    i += 1
+                word.append(command[i])
+                i += 1
+            if i >= n:
+                raise ValueError("unclosed double quote")
+            in_word = True
+            i += 1
+        elif c == "#" and not in_word:
+            end = command.find("\n", i)
+            i = n if end < 0 else end
+        elif c == "$" and command.startswith("$(", i):
+            flush()
+            tokens.append(("op", "("))
+            i += 2
+        else:
+            match = REDIRECT.match(command, i) if (not in_word or c in "<>") else None
+            if match:
+                flush()
+                tokens.append(("redirect", match.group()))
+                i = match.end()
+                continue
+            op = next((op for op in OPERATORS if command.startswith(op, i)), None)
+            if op:
+                flush()
+                tokens.append(("op", op))
+                i += len(op)
+                continue
+            word.append(c)
+            in_word = True
+            i += 1
+    flush()
+    return tokens
+
+
+def simple_commands(command: str) -> List[Command]:
+    """-> [(words, [(redirect operator, its target)])], one per simple command."""
+    commands: List[Command] = []
+    words: List[str] = []
+    redirects: List[Tuple[str, str]] = []
+    pending = None
+    for kind, text in shell_tokens(strip_heredoc_bodies(command)):
+        if kind == "op":
+            if words or redirects:
+                commands.append((words, redirects))
+            words, redirects, pending = [], [], None
+        elif kind == "redirect":
+            pending = text
+        elif pending is not None:
+            redirects.append((pending, text))
+            pending = None
+        else:
+            words.append(text)
+    if words or redirects:
+        commands.append((words, redirects))
+    return commands
+
+
+def command_words(words: List[str]) -> Tuple[str, List[str]]:
+    """-> (the command name, its arguments), past any leading VAR=value words."""
+    index = 0
+    while index < len(words) and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", words[index]):
+        index += 1
+    if index >= len(words):
+        return "", []
+    return words[index], words[index + 1:]
+
+
+def resolve_word(word: str, cwd: Optional[str]) -> Optional[str]:
+    """A shell word as a real absolute path, or None when it depends on something
+    this guard cannot see: a variable other than $HOME, or a relative path in a
+    folder it does not know."""
+    path = re.sub(r"^~(?=/|$)", lambda _: HOME, word)
+    path = re.sub(r"\$\{HOME\}|\$HOME\b", lambda _: HOME, path)
+    if "$" in path or not path:
+        return None
+    if not os.path.isabs(path):
+        if cwd is None:
+            return None
+        path = os.path.join(cwd, path)
+    return os.path.realpath(path)
+
+
+def operands(args: List[str]) -> List[str]:
+    return [arg for arg in args if not arg.startswith("-") or arg == "-"]
+
+
+def copy_destinations(args: List[str], cwd: Optional[str]) -> List[str]:
+    """Where a cp or mv lands: into -t DIR, else onto its last operand, which when it
+    is a folder receives each source under its own name."""
+    for index, arg in enumerate(args):
+        if arg == "-t" and index + 1 < len(args):
+            sources = operands(args[:index] + args[index + 2:])
+            return [os.path.join(args[index + 1], os.path.basename(s.rstrip("/"))) for s in sources]
+        if arg.startswith("--target-directory="):
+            sources = operands([a for a in args if a != arg])
+            return [os.path.join(arg.split("=", 1)[1], os.path.basename(s.rstrip("/"))) for s in sources]
+    words = operands(args)
+    if len(words) < 2:
+        return []
+    *sources, destination = words
+    resolved = resolve_word(destination, cwd)
+    if destination.endswith("/") or (resolved and os.path.isdir(resolved)):
+        return [os.path.join(destination, os.path.basename(s.rstrip("/"))) for s in sources]
+    return [destination]
+
+
+def written_paths(command: str, cwd: Optional[str]) -> List[str]:
+    """Every file this command writes through a redirect, tee, sed -i, cp or mv,
+    resolved to a real path. A `cd` moves the folder later relative paths resolve
+    in; a cd the guard cannot read leaves relative paths unresolved."""
+    found = []
+    for words, redirects in simple_commands(command):
+        name, args = command_words(words)
+        targets = [target for op, target in redirects
+                   if ">" in op and not (op.endswith("&") and re.fullmatch(r"[0-9]+|-", target))]
+        if name == "cd":
+            rest = operands(args)
+            cwd = resolve_word(rest[0], cwd) if rest else HOME
+        elif name == "tee":
+            targets += operands(args)
+        elif name == "sed" and any(re.match(r"^-[a-zA-Z]*i|^--in-place", arg) for arg in args):
+            targets += operands(args)
+        elif name in ("cp", "mv"):
+            targets += copy_destinations(args, cwd)
+        for target in targets:
+            path = resolve_word(target, cwd)
+            if path and path != "/dev/null":
+                found.append(path)
+    return found
+
+
 # ---------------------------------------------------------------- command guard
 
+def shell_write_check(command: str, flat: str, cwd: Optional[str]) -> None:
+    """The file lock sees the Write and Edit tools only, so the same protected paths
+    are refused here when a shell command would write them."""
+    protected = guard_config("file_lock").get("protected") or []
+    if not protected:
+        return
+    try:
+        paths = written_paths(command, cwd)
+    except ValueError:
+        return  # a command the shell itself would reject; the rules above still ran
+    root = project_dir()
+    for path in paths:
+        pattern = matched_pattern(path, protected, root)
+        if pattern:
+            deny(
+                "BLOCKED by command-guard [shell-write-protected]: this command writes %s, a\n"
+                "  protected file (it matches `%s` in %s).\n"
+                "  command: %s\n"
+                "  instead: make the change with the Write or Edit tool, where the file lock asks\n"
+                "  for an approval token; a shell write would go around that check."
+                % (path, pattern, config_path(), flat))
+
+
 def command_guard() -> None:
-    command = (hook_input().get("tool_input") or {}).get("command") or ""
+    payload = hook_input()
+    command = (payload.get("tool_input") or {}).get("command") or ""
     if not command.strip():
         sys.exit(0)
     flat = " ".join(command.split())
+    cwd = payload.get("cwd")
+    cwd = os.path.realpath(cwd) if isinstance(cwd, str) and os.path.isabs(cwd) else None
     config = guard_config("command_guard")
     allowlist = config.get("allowlist") or []
 
@@ -181,6 +402,7 @@ def command_guard() -> None:
             "  The pattern must match the whole command, so an allowlist entry frees one\n"
             "  command, never a shape."
             % (rule["id"], rule["blocks"], flat, rule["instead"], config_path(), rule["id"]))
+    shell_write_check(command, flat, cwd)
     sys.exit(0)
 
 

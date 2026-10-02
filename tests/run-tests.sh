@@ -60,6 +60,37 @@ if [ "$ALLOWED" -eq 0 ] && [ "$STILL" -eq 2 ]; then
 else bad "6  an allowlist entry frees one exact command" "allowed=$ALLOWED neighbour=$STILL: $OUT$OUT2"; fi
 rm -r "$P"
 
+# ---------------------------------------------------------------- shell writes into protected files
+
+P="$(make_project)"
+run_in() { bash_payload_cwd "$1" "$P" | GUARDRAILS_PROJECT_DIR="$P" bash "$CMD_GUARD" 2>&1; }
+SHELL_OK=1
+for WRITE in "echo x > rules/team-rules.md" \
+             "echo x >>$P/rules/team-rules.md" \
+             "printf x | tee -a notes/log.txt $P/rules/team-rules.md" \
+             "sed -i '' 's/a;b/c/' rules/team-rules.md" \
+             "cp /tmp/new.json guardrails.json 2>/dev/null" \
+             "mv /tmp/new.md rules/" \
+             "cd rules && echo x > team-rules.md"; do
+  OUT="$(run_in "$WRITE")"; RC=$?
+  if [ "$RC" -ne 2 ] || ! has "shell-write-protected" "$OUT"; then
+    SHELL_OK=0; bad "21 a shell write into a protected file is refused" "$WRITE -> exit $RC: $OUT"; break
+  fi
+done
+[ "$SHELL_OK" -eq 1 ] && ok "21 a redirect, tee, sed -i, cp or mv into a protected file is refused"
+
+SHELL_OK=1
+for READ in "cat rules/team-rules.md > /tmp/copy.md" \
+            "cp rules/team-rules.md /tmp/backup.md" \
+            "sed -n 1p rules/team-rules.md 2>&1" \
+            "echo x > notes/scratch.md" \
+            "git commit -m 'never > rules/team-rules.md'"; do
+  OUT="$(run_in "$READ")"; RC=$?
+  [ "$RC" -eq 0 ] || { SHELL_OK=0; bad "22 reads and writes elsewhere pass" "$READ -> exit $RC: $OUT"; break; }
+done
+[ "$SHELL_OK" -eq 1 ] && ok "22 reading a protected file, or writing anywhere else, passes"
+rm -r "$P"
+
 # ---------------------------------------------------------------- protected-file lock
 
 P="$(make_project)"

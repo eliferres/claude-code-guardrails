@@ -59,12 +59,19 @@ be allowlisted; a shape cannot.
 | `curl-pipe-to-shell` | `curl` or `wget` piped into a shell | executes code nobody read |
 | `git-reset-hard` | `git reset --hard` | throws away uncommitted work with no recovery path |
 | `git-clean-force` | `git clean -f` | deletes untracked files git never had a copy of |
+| `shell-write-protected` | a redirect, `tee`, `sed -i`, `cp` or `mv` into a file the lock protects | the lock sees the Write and Edit tools; a shell write would go around it |
 
 **Protected-file lock.** A PreToolUse hook on writes. Files you list as
 high-stakes (settings, hook scripts, the rules the agent reads every session)
 are refused unless an approval token names them. The token covers one batch,
 expires, and is minted by a separate command a human runs after seeing the
 change. A live token from other work is not a yes for this one.
+
+The lock only sees the file tools, so the command guard closes the shell route
+to the same paths: it reads the command the way the shell would (quotes,
+redirects without spaces, a `cd` earlier in the line) and refuses a write
+into a protected file whatever token is open, pointing back to the file tools.
+A path built from a variable other than `$HOME` cannot be read and passes.
 
 **Cross-session write claims.** Two agent sessions on one file means the second
 write silently eats the first. The first writer claims the file; a second

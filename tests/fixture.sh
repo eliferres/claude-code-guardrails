@@ -66,6 +66,13 @@ bash_payload() {
   printf '{"tool_name":"Bash","tool_input":{"command":"%s"}}' "$1"
 }
 
+# A Bash payload encoded by json.dumps, so quotes and backslashes in the command
+# survive, carrying the session's working directory the way Claude Code sends it.
+bash_payload_cwd() {
+  python3 -c 'import json, sys
+print(json.dumps({"tool_name": "Bash", "tool_input": {"command": sys.argv[1]}, "cwd": sys.argv[2]}))' "$1" "$2"
+}
+
 write_payload() {
   printf '{"tool_name":"Write","tool_input":{"file_path":"%s"},"session_id":"%s"}' "$1" "${2:-cli}"
 }

@@ -5,6 +5,7 @@ Versions match the git tags.
 ## Unreleased
 
 ### Added
+- Added shell-write protection: the command guard refuses a redirect, `tee`, `sed -i`, `cp` or `mv` into a file the protected-file lock covers, a route that walked past the lock because it only checks the Write and Edit tools.
 - Added `pyproject.toml`, so `pipx install git+https://github.com/eliferres/claude-code-guardrails` installs a `claude-code-guardrails` command with `--version` and the seven existing jobs as subcommands.
 
 ### Changed
