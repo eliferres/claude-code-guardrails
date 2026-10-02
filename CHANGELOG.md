@@ -7,6 +7,7 @@ Versions match the git tags.
 ### Added
 - Added shell-write protection: the command guard refuses a redirect, `tee`, `sed -i`, `cp` or `mv` into a file the protected-file lock covers, a route that walked past the lock because it only checks the Write and Edit tools.
 - Added spelling-proof matching: a refused command written as `'rm'`, `r\m`, `/bin/Rm`, `env bash`, `command rm`, `RM` or through an alias defined in the same command is refused like the plain spelling.
+- Added temp-safe deletes: a recursive `rm` whose every path resolves inside `$TMPDIR`, `/tmp` or `/var/tmp` passes, switched on per rule with `"allow_in_temp": true` and on in the shipped recursive-delete rule.
 - Added `pyproject.toml`, so `pipx install git+https://github.com/eliferres/claude-code-guardrails` installs a `claude-code-guardrails` command with `--version` and the seven existing jobs as subcommands.
 
 ### Changed

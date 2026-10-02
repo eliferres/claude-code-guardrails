@@ -58,9 +58,16 @@ the name (macOS finds `RM` as `rm` on its default case-insensitive disk), and
 expands an alias defined earlier in the same command. Only the command word is
 rewritten, so a rule's view of the arguments never changes.
 
+A rule with `"allow_in_temp": true` (the shipped recursive-delete rule has it)
+lets a recursive `rm` through when every path it names resolves strictly inside
+the system temp folders (`$TMPDIR`, `/tmp`, `/var/tmp`). Scratch work there is
+routine and safe to lose. Paths are resolved first, so `/tmp` itself, a `..`
+that climbs out, a symlink that leads out, a variable the guard cannot read, or
+one path outside temp in the list keeps the refusal.
+
 | Rule | Refuses | Why |
 | --- | --- | --- |
-| `recursive-force-delete` | `rm -rf` and its flag spellings | removes a tree with no confirmation and no undo |
+| `recursive-force-delete` | `rm -rf` and its flag spellings, outside the temp folders | removes a tree with no confirmation and no undo |
 | `blanket-git-stage` | `git add -A`, `git add .` | sweeps up secrets, local state files and unrelated edits |
 | `wide-chmod` | `chmod -R`, `777`, `666`, `a+w`, `o+w` | quietly opens up every file under a tree |
 | `force-push-protected` | `git push --force` naming `main` or `master` | rewrites history other people have already pulled |

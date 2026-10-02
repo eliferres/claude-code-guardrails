@@ -19,7 +19,8 @@ make_project() {
         "id": "recursive-force-delete",
         "pattern": "\\brm\\s+(-[a-zA-Z]*([rR][a-zA-Z]*[fF]|[fF][a-zA-Z]*[rR])|-[rR]\\s+-[fF]|-[fF]\\s+-[rR]|--recursive\\s+--force|--force\\s+--recursive)",
         "blocks": "a recursive force-delete (rm -rf), which removes a tree with no confirmation and no undo",
-        "instead": "delete the named paths (rm path/one path/two), or move them to a trash directory you can inspect"
+        "instead": "delete the named paths (rm path/one path/two), or move them to a trash directory you can inspect",
+        "allow_in_temp": true
       },
       {
         "id": "blanket-git-stage",

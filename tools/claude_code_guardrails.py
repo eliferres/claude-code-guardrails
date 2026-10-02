@@ -21,6 +21,7 @@ Zero dependencies: Python 3.9+ standard library only.
 __version__ = "1.1.0"
 
 import fnmatch
+import glob
 import hashlib
 import json
 import os
@@ -28,8 +29,9 @@ import re
 import shlex
 import subprocess
 import sys
+import tempfile
 import time
-from typing import Any, Dict, List, NoReturn, Optional, Tuple
+from typing import Any, Dict, Iterator, List, NoReturn, Optional, Tuple
 
 
 
@@ -356,10 +358,12 @@ def simple_commands(command: str) -> List[Command]:
 
 def resolve_word(word: str, cwd: Optional[str]) -> Optional[str]:
     """A shell word as a real absolute path, or None when it depends on something
-    this guard cannot see: a variable other than $HOME, or a relative path in a
-    folder it does not know."""
+    this guard cannot see: a variable other than $HOME or $TMPDIR, or a relative
+    path in a folder it does not know."""
     path = re.sub(r"^~(?=/|$)", lambda _: HOME, word)
     path = re.sub(r"\$\{HOME\}|\$HOME\b", lambda _: HOME, path)
+    if os.environ.get("TMPDIR"):
+        path = re.sub(r"\$\{TMPDIR\}|\$TMPDIR\b", lambda _: os.environ["TMPDIR"], path)
     if "$" in path or not path:
         return None
     if not os.path.isabs(path):
@@ -393,28 +397,71 @@ def copy_destinations(args: List[str], cwd: Optional[str]) -> List[str]:
     return [destination]
 
 
-def written_paths(command: str, cwd: Optional[str]) -> List[str]:
-    """Every file this command writes through a redirect, tee, sed -i, cp or mv,
-    resolved to a real path. A `cd` moves the folder later relative paths resolve
-    in; a cd the guard cannot read leaves relative paths unresolved."""
-    found = []
+def commands_in_folder(command: str, cwd: Optional[str]) -> Iterator[Tuple[str, List[str], List[Tuple[str, str]], Optional[str]]]:
+    """-> (name, args, redirects, folder it runs in) per simple command. A `cd`
+    moves the folder for the commands after it; one the guard cannot read leaves
+    the folder unknown (None), so relative paths after it stay unresolved."""
     for words, redirects in simple_commands(command):
         name, args = (words[0], words[1:]) if words else ("", [])
-        targets = [target for op, target in redirects
-                   if ">" in op and not (op.endswith("&") and re.fullmatch(r"[0-9]+|-", target))]
+        yield name, args, redirects, cwd
         if name == "cd":
             rest = operands(args)
             cwd = resolve_word(rest[0], cwd) if rest else HOME
-        elif name == "tee":
+
+
+def written_paths(command: str, cwd: Optional[str]) -> List[str]:
+    """Every file this command writes through a redirect, tee, sed -i, cp or mv,
+    resolved to a real path."""
+    found = []
+    for name, args, redirects, folder in commands_in_folder(command, cwd):
+        targets = [target for op, target in redirects
+                   if ">" in op and not (op.endswith("&") and re.fullmatch(r"[0-9]+|-", target))]
+        if name == "tee":
             targets += operands(args)
         elif name == "sed" and any(re.match(r"^-[a-zA-Z]*i|^--in-place", arg) for arg in args):
             targets += operands(args)
         elif name in ("cp", "mv"):
-            targets += copy_destinations(args, cwd)
+            targets += copy_destinations(args, folder)
         for target in targets:
-            path = resolve_word(target, cwd)
+            path = resolve_word(target, folder)
             if path and path != "/dev/null":
                 found.append(path)
+    return found
+
+
+def temp_roots() -> List[str]:
+    roots = {tempfile.gettempdir(), "/tmp", "/var/tmp", os.environ.get("TMPDIR") or "/tmp"}
+    return sorted({os.path.realpath(root) for root in roots})
+
+
+def deletes_only_temp(command: str, cwd: Optional[str]) -> bool:
+    """True when the command has at least one recursive rm and every path each one
+    names resolves strictly inside a temp folder. A path that cannot be resolved,
+    the temp folder itself, a `..` or a symlink that leads out all count as outside;
+    so does a glob with any match outside."""
+    roots = temp_roots()
+
+    def inside(path: str) -> bool:
+        return any(path.startswith(root + os.sep) for root in roots)
+
+    found = False
+    for name, args, _, folder in commands_in_folder(command, cwd):
+        if name != "rm":
+            continue
+        if "--" in args:
+            split = args.index("--")
+            options, targets = args[:split], args[split + 1:]
+        else:
+            options, targets = args, operands(args)
+        if not any(re.match(r"^-[a-zA-Z]*[rR]|^--recursive$", arg) for arg in options):
+            continue
+        found = True
+        for target in targets:
+            path = resolve_word(target, folder)
+            if not path or not inside(path):
+                return False
+            if any(not inside(os.path.realpath(match)) for match in glob.glob(path)):
+                return False
     return found
 
 
@@ -443,6 +490,13 @@ def shell_write_check(command: str, flat: str, cwd: Optional[str]) -> None:
                 % (path, pattern, config_path(), flat))
 
 
+def safe_temp_delete(command: str, cwd: Optional[str]) -> bool:
+    try:
+        return deletes_only_temp(command, cwd)
+    except ValueError:
+        return False
+
+
 def command_guard() -> None:
     payload = hook_input()
     command = (payload.get("tool_input") or {}).get("command") or ""
@@ -459,6 +513,8 @@ def command_guard() -> None:
 
     for rule in config.get("rules") or []:
         if not any(re.search(rule["pattern"], text) for text in spellings):
+            continue
+        if rule.get("allow_in_temp") and safe_temp_delete(command, cwd):
             continue
         if any(entry.get("rule") == rule["id"] and re.fullmatch(entry.get("command", r"(?!)"), flat)
                for entry in allowlist):
