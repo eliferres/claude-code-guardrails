@@ -55,6 +55,9 @@
     ],
     "token_ttl_seconds": 1800
   },
+  "syntax_check": {
+    "paths": ["*.sh", "*.bash", ".claude/hooks/*", "tools/*"]
+  },
   "claims": {
     "ttl_seconds": 1800,
     "takeover_ttl_seconds": 600,
@@ -87,6 +90,13 @@
       "script": "tools/claims-guard.sh",
       "red_tests": [
         "tests/red/claims-collision.sh"
+      ]
+    },
+    {
+      "id": "syntax-guard",
+      "script": "tools/syntax-guard.sh",
+      "red_tests": [
+        "tests/red/syntax-guard-apostrophe.sh"
       ]
     }
   ]

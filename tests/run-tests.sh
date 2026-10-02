@@ -200,6 +200,62 @@ if [ "$RC" -eq 0 ] && has '"displaced_session": "session-alpha"' "$LEDGER" \
 else bad "12 a takeover ledgers the displaced session" "exit $RC; ledger: $LEDGER"; fi
 rm -r "$P"
 
+# ---------------------------------------------------------------- syntax guard
+
+P="$(make_project)"
+SYNTAX_GUARD="$ROOT/tools/syntax-guard.sh"
+write_file() { content_payload "$P/$1" "$2" | GUARDRAILS_PROJECT_DIR="$P" bash "$SYNTAX_GUARD" 2>&1; }
+
+OUT="$(write_file hook.sh "$(printf '#!/usr/bin/env bash\nif true; then\n  echo ok\n')")"; RC=$?
+OUT2="$(write_file hook.py "$(printf 'def check(:\n    pass\n')")"; RC2=$?
+if [ "$RC" -eq 2 ] && has "bash -n" "$OUT" && [ "$RC2" -eq 2 ] && has "python line 1" "$OUT2"; then
+  ok "27 a shell or Python file that would not parse is refused before it is written"
+else bad "27 an unparseable shell or Python write is refused" "exit $RC/$RC2: $OUT $OUT2"; fi
+
+# The shape that motivated this guard: an apostrophe in a comment inside a
+# single-quoted python3 -c body. The quote count stays even, so bash -n passes
+# and the Python runs cut off at the apostrophe.
+# (Written to files first: bash 3.2 misreads a quote in a heredoc inside $(...).)
+cat > "$P/apostrophe.sh" <<'BODY'
+#!/usr/bin/env bash
+python3 -c '
+import sys
+# the hook's payload isn't trusted, so read it once
+print(sys.stdin.read())
+'
+BODY
+cat > "$P/heredoc.sh" <<'BODY'
+#!/usr/bin/env bash
+python3 - <<'PY'
+def check(:
+    pass
+PY
+BODY
+APOSTROPHE="$(cat "$P/apostrophe.sh")"
+HEREDOC="$(cat "$P/heredoc.sh")"
+bash -n "$P/apostrophe.sh"; BASH_N=$?
+OUT="$(write_file hook.sh "$APOSTROPHE")"; RC=$?
+OUT2="$(write_file hook.sh "$HEREDOC")"; RC2=$?
+if [ "$BASH_N" -eq 0 ] && [ "$RC" -eq 2 ] && has "apostrophe" "$OUT" && [ "$RC2" -eq 2 ] && has "heredoc PY" "$OUT2"; then
+  ok "28 Python embedded in a shell file is checked: a cut-off -c body and a broken heredoc are refused"
+else bad "28 embedded Python is checked" "bash -n $BASH_N, exit $RC/$RC2: $OUT $OUT2"; fi
+
+printf '#!/usr/bin/env bash\necho one\n' > "$P/hook.sh"
+SYNTAX_OK=1
+for CASE in ok-write ok-edit outside-scope; do
+  case "$CASE" in
+    ok-write) OUT="$(write_file good.py "$(printf 'def check():\n    return 1\n')")"; RC=$? ;;
+    ok-edit) OUT="$(edit_payload "$P/hook.sh" "echo one" "echo two" | GUARDRAILS_PROJECT_DIR="$P" bash "$SYNTAX_GUARD" 2>&1)"; RC=$? ;;
+    outside-scope) OUT="$(write_file notes/todo.txt "if then (")"; RC=$? ;;
+  esac
+  [ "$RC" -eq 0 ] || { SYNTAX_OK=0; bad "29 parseable or out-of-scope writes pass" "$CASE -> exit $RC: $OUT"; break; }
+done
+OUT="$(edit_payload "$P/hook.sh" "echo one" "if true; then" | GUARDRAILS_PROJECT_DIR="$P" bash "$SYNTAX_GUARD" 2>&1)"; RC=$?
+if [ "$SYNTAX_OK" -eq 1 ] && [ "$RC" -eq 2 ] && has "Edit would leave" "$OUT"; then
+  ok "29 a parseable write passes, and an Edit is judged by the whole file it would leave"
+elif [ "$SYNTAX_OK" -eq 1 ]; then bad "29 an Edit that breaks the file is refused" "exit $RC: $OUT"; fi
+rm -r "$P"
+
 # ---------------------------------------------------------------- liveness harness
 
 kit_copy() {

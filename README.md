@@ -1,6 +1,6 @@
 # claude-code-guardrails
 
-Three deterministic guards for Claude Code that refuse a dangerous command, a protected write, or a colliding session before it runs, and say what to do instead. No model in the loop. A liveness harness proves the three still block, months later.
+Four deterministic guards for Claude Code that refuse a dangerous command, a protected write, a colliding session, or a script that will not parse, before it runs, and say what to do instead. No model in the loop. A liveness harness proves the four still block, months later.
 
 Bash and Python 3.9+, nothing else.
 
@@ -28,7 +28,7 @@ bash tests/run-tests.sh    # the full suite, hermetic, no network
 Installed, each script in `tools/` is a subcommand of one command:
 `claude-code-guardrails command-guard` does what `tools/command-guard.sh` does
 (the others are `file-lock`, `lock-approve`, `claims-guard`, `claims-clear`,
-`claims-takeover` and `liveness`). It reads `guardrails.json` from
+`claims-takeover`, `syntax-guard` and `liveness`). It reads `guardrails.json` from
 `$GUARDRAILS_PROJECT_DIR`, then `$CLAUDE_PROJECT_DIR`, then the current
 directory. `liveness` also needs the kit's `tools/` and `tests/`, so run it
 inside a clone. An editable install (`pip install -e`) is the exception: the
@@ -41,7 +41,7 @@ edit `guardrails.json`: the rules, the protected paths and the allowlist are all
 yours. The walkthrough below runs
 every guard against the fictional workspace in `demo/`, no install needed.
 
-## The three guards
+## The guards
 
 **Command guard.** A PreToolUse hook on Bash. It matches the command against a
 list of shapes you configure (recursive force-delete, blanket `git add -A`,
@@ -94,6 +94,16 @@ session is refused, told who holds it and for how long, and given two ways out:
 release the claim, or take it over. A takeover is logged, and what the displaced
 session was holding is written to a ledger so it gets picked up rather than lost.
 
+**Syntax guard.** A PreToolUse hook on writes. A shell or Python file under the
+paths in `syntax_check.paths` is rebuilt as the Write or Edit would leave it and
+parsed before it lands: `bash -n` for shell, a compile for Python, and a compile
+of the Python a shell file embeds in a `python3 -c '...'` body or a quoted
+heredoc. That last check exists because of one shape: an apostrophe in a comment
+inside a single-quoted `-c` body ends the shell string early. With an even quote
+count `bash -n` still passes and the Python runs cut off; it broke three hooks in
+one day. Checking before the write matters for hooks in particular, since a hook
+that does not parse refuses every call that runs it, including the fix.
+
 ## Liveness: proving a guard still blocks
 
 Guards rot quietly: a refactor loosens a pattern, a test starts passing for the
@@ -123,7 +133,8 @@ is the source of truth):
         "matcher": "Write|Edit|NotebookEdit",
         "hooks": [
           { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/tools/file-lock-guard.sh", "timeout": 10 },
-          { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/tools/claims-guard.sh", "timeout": 10 }
+          { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/tools/claims-guard.sh", "timeout": 10 },
+          { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/tools/syntax-guard.sh", "timeout": 10 }
         ]
       }
     ],
@@ -278,12 +289,13 @@ are blocked, it is that you can still prove, months later, that they are.
 
 - `tools/command-guard.sh`: PreToolUse on Bash, refuses configured command shapes.
 - `tools/file-lock-guard.sh`: PreToolUse on writes, protected paths need a token.
+- `tools/syntax-guard.sh`: PreToolUse on writes, a script that would not parse is refused.
 - `tools/lock-approve.sh`: mints the batch-scoped, expiring approval token.
 - `tools/claims-guard.sh`: PreToolUse on writes, refuses a file another session holds.
 - `tools/claims-clear.sh`: releases claims; wire it to SessionEnd.
 - `tools/claims-takeover.sh`: takes a claim and ledgers what it displaced.
 - `tools/liveness.sh`: proves every guard in the manifest still goes red.
-- `tools/claude_code_guardrails.py`: the implementation all seven shims call. Stdlib only.
+- `tools/claude_code_guardrails.py`: the implementation every shim calls. Stdlib only.
 - `guardrails.json`: one config, holding the rules, allowlist, protected paths, claims and manifest.
 - `demo/`: a fictional workspace and the hook wiring, for the walkthrough.
 - `tests/run-tests.sh`: the suite, real fixtures in temp dirs, no mocks.

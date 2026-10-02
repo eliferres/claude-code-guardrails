@@ -57,6 +57,9 @@ make_project() {
     "ttl_seconds": 1800,
     "takeover_ttl_seconds": 600,
     "exempt": [".guardrails/*", "*.log"]
+  },
+  "syntax_check": {
+    "paths": ["*.sh", "*.py"]
   }
 }
 JSON
@@ -76,4 +79,16 @@ print(json.dumps({"tool_name": "Bash", "tool_input": {"command": sys.argv[1]}, "
 
 write_payload() {
   printf '{"tool_name":"Write","tool_input":{"file_path":"%s"},"session_id":"%s"}' "$1" "${2:-cli}"
+}
+
+# A Write payload carrying the whole new content of a file.
+content_payload() {
+  python3 -c 'import json, sys
+print(json.dumps({"tool_name": "Write", "tool_input": {"file_path": sys.argv[1], "content": sys.argv[2]}}))' "$1" "$2"
+}
+
+# An Edit payload: replace old_string with new_string in the file on disk.
+edit_payload() {
+  python3 -c 'import json, sys
+print(json.dumps({"tool_name": "Edit", "tool_input": {"file_path": sys.argv[1], "old_string": sys.argv[2], "new_string": sys.argv[3]}}))' "$1" "$2" "$3"
 }
