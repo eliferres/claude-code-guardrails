@@ -25,6 +25,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 import time
@@ -254,13 +255,89 @@ def shell_tokens(command: str) -> List[Tuple[str, str]]:
     return tokens
 
 
+ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+# Words that run the command after them. Each maps to its options that take a
+# value, so that value is not read as the command.
+WRAPPERS = {
+    "command": set(), "builtin": set(), "nohup": set(), "time": set(),
+    "exec": {"-a"}, "nice": {"-n"}, "env": {"-u", "-C", "-S", "-P"},
+    "sudo": {"-u", "-g", "-C", "-D", "-h", "-p", "-U", "-T", "-r", "-t"},
+}
+
+
+def normalized_tokens(tokens: List[Tuple[str, str]]) -> List[Tuple[str, str]]:
+    """The tokens with every command word in one spelling: wrappers (env, command,
+    sudo...) and leading VAR=value words dropped, the directory stripped (/bin/rm),
+    the name lowercased (a case-insensitive filesystem runs RM as rm), and an alias
+    defined earlier in the same command replaced by its value. Arguments are left
+    exactly as written."""
+    out: List[Tuple[str, str]] = []
+    queue = list(tokens)
+    aliases: Dict[str, str] = {}
+    at_start, wrapper, head, expansions = True, None, "", 0
+    while queue:
+        kind, text = queue.pop(0)
+        if kind != "word":
+            out.append((kind, text))
+            if kind == "op":
+                at_start, wrapper, head = True, None, ""
+            elif queue and queue[0][0] == "word":
+                out.append(queue.pop(0))  # a redirect's target is never the command word
+            continue
+        if not at_start:
+            if head == "alias" and "=" in text:
+                name, value = text.split("=", 1)
+                aliases[name.lower()] = value
+            out.append((kind, text))
+            continue
+        if wrapper is not None and text.startswith("-"):
+            if text in WRAPPERS[wrapper] and queue and queue[0][0] == "word":
+                queue.pop(0)
+            continue
+        if ASSIGNMENT.match(text):
+            continue
+        name = os.path.basename(text).lower()
+        if name in WRAPPERS:
+            wrapper = name
+            continue
+        if name in aliases and expansions < 20:  # bounded: an alias may name itself
+            expansions += 1
+            queue[0:0] = shell_tokens(aliases[name])
+            continue
+        out.append((kind, name))
+        at_start, wrapper, head = False, None, name
+    return out
+
+
+def command_tokens(command: str) -> List[Tuple[str, str]]:
+    return normalized_tokens(shell_tokens(strip_heredoc_bodies(command)))
+
+
+def normalized_command(command: str) -> Optional[str]:
+    """The command rendered back to one line from its normalized tokens, so the
+    configured rule patterns can be matched against it as well as the raw text.
+    None when the command does not parse."""
+    try:
+        tokens = command_tokens(command)
+    except ValueError:
+        return None
+    parts = []
+    for kind, text in tokens:
+        if kind == "word":
+            parts.append(shlex.quote(text))
+        else:
+            parts.append(";" if text == "\n" else text)
+    return " ".join(parts)
+
+
 def simple_commands(command: str) -> List[Command]:
-    """-> [(words, [(redirect operator, its target)])], one per simple command."""
+    """-> [(words, [(redirect operator, its target)])], one per simple command,
+    with each command word in its normalized spelling."""
     commands: List[Command] = []
     words: List[str] = []
     redirects: List[Tuple[str, str]] = []
     pending = None
-    for kind, text in shell_tokens(strip_heredoc_bodies(command)):
+    for kind, text in command_tokens(command):
         if kind == "op":
             if words or redirects:
                 commands.append((words, redirects))
@@ -275,16 +352,6 @@ def simple_commands(command: str) -> List[Command]:
     if words or redirects:
         commands.append((words, redirects))
     return commands
-
-
-def command_words(words: List[str]) -> Tuple[str, List[str]]:
-    """-> (the command name, its arguments), past any leading VAR=value words."""
-    index = 0
-    while index < len(words) and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", words[index]):
-        index += 1
-    if index >= len(words):
-        return "", []
-    return words[index], words[index + 1:]
 
 
 def resolve_word(word: str, cwd: Optional[str]) -> Optional[str]:
@@ -332,7 +399,7 @@ def written_paths(command: str, cwd: Optional[str]) -> List[str]:
     in; a cd the guard cannot read leaves relative paths unresolved."""
     found = []
     for words, redirects in simple_commands(command):
-        name, args = command_words(words)
+        name, args = (words[0], words[1:]) if words else ("", [])
         targets = [target for op, target in redirects
                    if ">" in op and not (op.endswith("&") and re.fullmatch(r"[0-9]+|-", target))]
         if name == "cd":
@@ -386,9 +453,12 @@ def command_guard() -> None:
     cwd = os.path.realpath(cwd) if isinstance(cwd, str) and os.path.isabs(cwd) else None
     config = guard_config("command_guard")
     allowlist = config.get("allowlist") or []
+    # Each rule is matched against the command as written and in its normalized
+    # spelling; the allowlist reads only the command as written.
+    spellings = [flat] + [text for text in [normalized_command(command)] if text]
 
     for rule in config.get("rules") or []:
-        if not re.search(rule["pattern"], flat):
+        if not any(re.search(rule["pattern"], text) for text in spellings):
             continue
         if any(entry.get("rule") == rule["id"] and re.fullmatch(entry.get("command", r"(?!)"), flat)
                for entry in allowlist):

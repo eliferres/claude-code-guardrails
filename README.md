@@ -50,6 +50,14 @@ curl-piped-into-a-shell, `git reset --hard`, `git clean -f`) and refuses with
 the shape it caught and the safe way to do the same job. One exact command can
 be allowlisted; a shape cannot.
 
+Each rule is matched twice: against the command as written, and against the
+same command with every command word in one spelling. That second reading drops
+quotes and backslashes (`'rm'`, `r\m`), the directory (`/bin/rm`), wrappers
+(`env`, `command`, `sudo`, `nohup`) and leading `VAR=value` words, lowercases
+the name (macOS finds `RM` as `rm` on its default case-insensitive disk), and
+expands an alias defined earlier in the same command. Only the command word is
+rewritten, so a rule's view of the arguments never changes.
+
 | Rule | Refuses | Why |
 | --- | --- | --- |
 | `recursive-force-delete` | `rm -rf` and its flag spellings | removes a tree with no confirmation and no undo |
@@ -253,8 +261,9 @@ are blocked, it is that you can still prove, months later, that they are.
   deliberately: a config typo must not brick the harness. Each one prints one
   warning on stderr naming the config and what was wrong with it, and liveness
   is what tells you a guard went quiet.
-- The command guard reads the command as text. Variable indirection, aliases and
-  a script that wraps the dangerous call will walk past it.
+- The command guard reads the command, not what it runs. Variable indirection
+  (`$CMD -rf x`), an alias from your shell profile and a script that wraps the
+  dangerous call will walk past it.
 - Exercised with Claude Code. Any harness that can run a hook script and read an
   exit code can use these, but the payload shape is Claude Code's.
 
