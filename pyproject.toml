@@ -19,7 +19,7 @@ Changelog = "https://github.com/eliferres/claude-code-guardrails/blob/main/CHANG
 claude-code-guardrails = "claude_code_guardrails:main"
 
 [tool.setuptools]
-py-modules = ["claude_code_guardrails"]
+packages = ["claude_code_guardrails"]
 package-dir = { "" = "tools" }
 
 [tool.setuptools.dynamic]

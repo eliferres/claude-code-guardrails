@@ -353,7 +353,7 @@ are blocked, it is that you can still prove, months later, that they are.
 - `tools/claims-takeover.sh`: takes a claim and ledgers what it displaced.
 - `tools/liveness.sh`: proves every guard in the manifest still goes red.
 - `tools/pre-push-secret-scan.sh`: optional git pre-push hook, refuses a push that adds a credential.
-- `tools/claude_code_guardrails.py`: the implementation every shim calls. Stdlib only.
+- `tools/claude_code_guardrails/`: the implementation every shim calls, one module per job plus the shell reader. Stdlib only.
 - `guardrails.json`: one config, holding the rules, allowlist, protected paths, claims and manifest.
 - `demo/`: a fictional workspace and the hook wiring, for the walkthrough.
 - `tests/run-tests.sh`: the suite, real fixtures in temp dirs, no mocks.
