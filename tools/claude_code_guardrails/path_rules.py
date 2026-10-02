@@ -31,10 +31,11 @@ def deletes_only_temp(command: str, cwd: Optional[str], pattern: str) -> bool:
     names resolves strictly inside a temp folder, and nothing else in the command
     matches the rule's pattern (`sh -c 'rm -rf ...'`, `find -exec rm -rf`). A path
     that cannot be resolved, the temp folder itself, a `..` or a symlink that leads
-    out all count as outside; so does a glob with any match outside. A heredoc or a
-    command substitution can carry a delete this reading cannot see, so either one
-    keeps the refusal."""
-    if HEREDOC.search(command) or re.search(r"\$\(|`|<\(", command):
+    out all count as outside; so does a glob with any match outside. A heredoc, a
+    command substitution, a subshell or a zsh glob qualifier (`w(:h:h)` drops path
+    parts) can change what gets deleted in a way this reading cannot follow, so a
+    heredoc, any bracket or a backtick keeps the refusal."""
+    if HEREDOC.search(command) or re.search(r"[()`]", command):
         return False
     roots = temp_roots()
     unreadable = reassigned_names(command)

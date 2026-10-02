@@ -153,6 +153,24 @@ for OUTSIDE in "rm -rf /tmp" \
 done
 [ "$TEMP_OK" -eq 1 ] && ok "26 temp itself, a mixed list, .., an unknown variable or a link out of temp stay refused"
 rm "$LINK"
+
+# every_exit <code> <label> <command>...: each command, run through the command
+# guard in $P, must exit <code>; every miss is reported.
+every_exit() {
+  local want="$1" label="$2" cmd out rc missed=0
+  shift 2
+  for cmd in "$@"; do
+    out="$(run_in "$cmd")"; rc=$?
+    [ "$rc" -eq "$want" ] || { missed=1; bad "$label" "$cmd -> exit $rc: $out"; }
+  done
+  [ "$missed" -eq 0 ] && ok "$label"
+}
+
+# zsh reads w(:h:h:h) as w with its last three path parts dropped, so a target
+# that looks like temp can expand to /.
+every_exit 2 "35 a target carrying a zsh glob qualifier keeps the refusal" \
+  "mkdir -p /tmp/gr-q/w && rm -rf /tmp/gr-q/w(:h:h:h)" \
+  "rm -rf /tmp/gr-q/w(:h:h:h)"
 rm -r "$P"
 
 # ---------------------------------------------------------------- protected-file lock
