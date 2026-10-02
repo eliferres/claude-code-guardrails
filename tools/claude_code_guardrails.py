@@ -36,7 +36,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from typing import Any, Dict, Iterator, List, NoReturn, Optional, Tuple
+from typing import Any, Dict, FrozenSet, Iterator, List, NoReturn, Optional, Tuple
 
 
 
@@ -210,9 +210,6 @@ REDIRECT = re.compile(r"[0-9]*(?:&>>|&>|>>|>\||>&|>|<<<|<<-|<<|<&|<>|<)")
 OPERATORS = ("&&", "||", "|&", ";;", ";", "|", "&", "(", ")", "`", "\n")
 HOME = os.path.expanduser("~")
 
-Command = Tuple[List[str], List[Tuple[str, str]]]
-
-
 def strip_heredoc_bodies(command: str) -> str:
     kept, pending = [], []
     for line in command.split("\n"):
@@ -374,39 +371,26 @@ def normalized_command(command: str) -> Optional[str]:
     return " ".join(parts)
 
 
-def simple_commands(command: str) -> List[Command]:
-    """-> [(words, [(redirect operator, its target)])], one per simple command,
-    with each command word in its normalized spelling."""
-    commands: List[Command] = []
-    words: List[str] = []
-    redirects: List[Tuple[str, str]] = []
-    pending = None
-    for kind, text in command_tokens(command):
-        if kind == "op":
-            if words or redirects:
-                commands.append((words, redirects))
-            words, redirects, pending = [], [], None
-        elif kind == "redirect":
-            pending = text
-        elif pending is not None:
-            redirects.append((pending, text))
-            pending = None
-        else:
-            words.append(text)
-    if words or redirects:
-        commands.append((words, redirects))
-    return commands
+def reassigned_names(command: str) -> FrozenSet[str]:
+    """$HOME and $TMPDIR are read from the guard's own environment, which is only
+    right when the command does not set them itself (`TMPDIR=$HOME; rm -rf ...`)."""
+    bare = re.sub(r"\$\{?(?:HOME|TMPDIR)\}?", "", command)
+    return frozenset(name for name in ("HOME", "TMPDIR") if re.search(r"\b%s\b" % name, bare))
 
 
-def resolve_word(word: str, cwd: Optional[str]) -> Optional[str]:
+def resolve_word(word: str, cwd: Optional[str], unreadable: FrozenSet[str] = frozenset()) -> Optional[str]:
     """A shell word as a real absolute path, or None when it depends on something
-    this guard cannot see: a variable other than $HOME or $TMPDIR, or a relative
-    path in a folder it does not know."""
-    path = re.sub(r"^~(?=/|$)", lambda _: HOME, word)
-    path = re.sub(r"\$\{HOME\}|\$HOME\b", lambda _: HOME, path)
-    if os.environ.get("TMPDIR"):
-        path = re.sub(r"\$\{TMPDIR\}|\$TMPDIR\b", lambda _: os.environ["TMPDIR"], path)
-    if "$" in path or not path:
+    this guard cannot see: a variable other than $HOME or $TMPDIR (or one of those
+    the command sets itself), a brace list, ~user, or a relative path in a folder
+    it does not know."""
+    known = {"HOME": HOME, "TMPDIR": os.environ.get("TMPDIR")}
+    path = word
+    if re.match(r"~(/|$)", path) and "HOME" not in unreadable:
+        path = HOME + path[1:]
+    for name, value in known.items():
+        if value and name not in unreadable:
+            path = re.sub(r"\$\{%s\}|\$%s\b" % (name, name), lambda _: value, path)
+    if not path or path.startswith("~") or re.search(r"[$`{}]", path):
         return None
     if not os.path.isabs(path):
         if cwd is None:
@@ -419,7 +403,7 @@ def operands(args: List[str]) -> List[str]:
     return [arg for arg in args if not arg.startswith("-") or arg == "-"]
 
 
-def copy_destinations(args: List[str], cwd: Optional[str]) -> List[str]:
+def copy_destinations(args: List[str], cwd: Optional[str], unreadable: FrozenSet[str]) -> List[str]:
     """Where a cp or mv lands: into -t DIR, else onto its last operand, which when it
     is a folder receives each source under its own name."""
     for index, arg in enumerate(args):
@@ -433,27 +417,66 @@ def copy_destinations(args: List[str], cwd: Optional[str]) -> List[str]:
     if len(words) < 2:
         return []
     *sources, destination = words
-    resolved = resolve_word(destination, cwd)
+    resolved = resolve_word(destination, cwd, unreadable)
     if destination.endswith("/") or (resolved and os.path.isdir(resolved)):
         return [os.path.join(destination, os.path.basename(s.rstrip("/"))) for s in sources]
     return [destination]
 
 
+def folder_after(name: str, args: List[str], cwd: Optional[str], unreadable: FrozenSet[str]) -> Optional[str]:
+    if name in ("pushd", "popd"):
+        return None
+    if name != "cd":
+        return cwd
+    rest = operands(args)
+    if not rest:
+        return None if "HOME" in unreadable else HOME
+    folder = resolve_word(rest[0], cwd, unreadable)
+    return folder if folder and os.path.isdir(folder) else None  # a cd that fails leaves us guessing
+
+
 def commands_in_folder(command: str, cwd: Optional[str]) -> Iterator[Tuple[str, List[str], List[Tuple[str, str]], Optional[str]]]:
-    """-> (name, args, redirects, folder it runs in) per simple command. A `cd`
-    moves the folder for the commands after it; one the guard cannot read leaves
-    the folder unknown (None), so relative paths after it stay unresolved."""
-    for words, redirects in simple_commands(command):
-        name, args = (words[0], words[1:]) if words else ("", [])
-        yield name, args, redirects, cwd
-        if name == "cd":
-            rest = operands(args)
-            cwd = resolve_word(rest[0], cwd) if rest else HOME
+    """-> (name, args, [(redirect operator, its target)], folder it runs in) per
+    simple command, with the command word in its normalized spelling. A `cd` into
+    an existing folder moves the folder for the commands after it, until the end of
+    the subshell it ran in. Any other cd, and pushd or popd, leaves the folder
+    unknown (None), so relative paths after it stay unresolved."""
+    unreadable = reassigned_names(command)
+    words: List[str] = []
+    redirects: List[Tuple[str, str]] = []
+    pending = None
+    outer: List[Optional[str]] = []  # the folder outside each open subshell
+    in_backtick = False
+    for kind, text in command_tokens(command) + [("op", "\n")]:
+        if kind == "redirect":
+            pending = text
+            continue
+        if kind == "word":
+            if pending is not None:
+                redirects.append((pending, text))
+                pending = None
+            else:
+                words.append(text)
+            continue
+        if words or redirects:
+            name, args = (words[0], words[1:]) if words else ("", [])
+            yield name, args, redirects, cwd
+            cwd = folder_after(name, args, cwd, unreadable)
+        words, redirects, pending = [], [], None
+        opens = text == "(" or (text == "`" and not in_backtick)
+        closes = text == ")" or (text == "`" and in_backtick)
+        if text == "`":
+            in_backtick = not in_backtick
+        if opens:
+            outer.append(cwd)
+        elif closes and outer:
+            cwd = outer.pop()
 
 
 def written_paths(command: str, cwd: Optional[str]) -> List[str]:
     """Every file this command writes through a redirect, tee, sed -i, cp or mv,
     resolved to a real path."""
+    unreadable = reassigned_names(command)
     found = []
     for name, args, redirects, folder in commands_in_folder(command, cwd):
         targets = [target for op, target in redirects
@@ -463,9 +486,9 @@ def written_paths(command: str, cwd: Optional[str]) -> List[str]:
         elif name == "sed" and any(re.match(r"^-[a-zA-Z]*i|^--in-place", arg) for arg in args):
             targets += operands(args)
         elif name in ("cp", "mv"):
-            targets += copy_destinations(args, folder)
+            targets += copy_destinations(args, folder, unreadable)
         for target in targets:
-            path = resolve_word(target, folder)
+            path = resolve_word(target, folder, unreadable)
             if path and path != "/dev/null":
                 found.append(path)
     return found
@@ -476,35 +499,37 @@ def temp_roots() -> List[str]:
     return sorted({os.path.realpath(root) for root in roots})
 
 
-def deletes_only_temp(command: str, cwd: Optional[str]) -> bool:
-    """True when the command has at least one recursive rm and every path each one
-    names resolves strictly inside a temp folder. A path that cannot be resolved,
-    the temp folder itself, a `..` or a symlink that leads out all count as outside;
-    so does a glob with any match outside."""
+def deletes_only_temp(command: str, cwd: Optional[str], pattern: str) -> bool:
+    """True when the command has at least one recursive rm, every path each one
+    names resolves strictly inside a temp folder, and nothing else in the command
+    matches the rule's pattern (`sh -c 'rm -rf ...'`, `find -exec rm -rf`). A path
+    that cannot be resolved, the temp folder itself, a `..` or a symlink that leads
+    out all count as outside; so does a glob with any match outside. A heredoc or a
+    command substitution can carry a delete this reading cannot see, so either one
+    keeps the refusal."""
+    if HEREDOC.search(command) or re.search(r"\$\(|`|<\(", command):
+        return False
     roots = temp_roots()
+    unreadable = reassigned_names(command)
 
     def inside(path: str) -> bool:
         return any(path.startswith(root + os.sep) for root in roots)
 
-    found = False
+    found, rest = False, []
     for name, args, _, folder in commands_in_folder(command, cwd):
-        if name != "rm":
-            continue
-        if "--" in args:
-            split = args.index("--")
-            options, targets = args[:split], args[split + 1:]
-        else:
-            options, targets = args, operands(args)
-        if not any(re.match(r"^-[a-zA-Z]*[rR]|^--recursive$", arg) for arg in options):
+        split = args.index("--") if "--" in args else len(args)
+        options, targets = args[:split], operands(args[:split]) + args[split + 1:]
+        if name != "rm" or not any(re.match(r"^-[a-zA-Z]*[rR]|^--recursive$", arg) for arg in options):
+            rest.append(" ".join(shlex.quote(word) for word in [name] + args))
             continue
         found = True
         for target in targets:
-            path = resolve_word(target, folder)
+            path = resolve_word(target, folder, unreadable)
             if not path or not inside(path):
                 return False
             if any(not inside(os.path.realpath(match)) for match in glob.glob(path)):
                 return False
-    return found
+    return found and not re.search(pattern, " ; ".join(rest))
 
 
 # ---------------------------------------------------------------- command guard
@@ -532,9 +557,9 @@ def shell_write_check(command: str, flat: str, cwd: Optional[str]) -> None:
                 % (path, pattern, config_path(), flat), "shell-write-protected")
 
 
-def safe_temp_delete(command: str, cwd: Optional[str]) -> bool:
+def safe_temp_delete(command: str, cwd: Optional[str], pattern: str) -> bool:
     try:
-        return deletes_only_temp(command, cwd)
+        return deletes_only_temp(command, cwd, pattern)
     except ValueError:
         return False
 
@@ -556,7 +581,7 @@ def command_guard() -> None:
     for rule in config.get("rules") or []:
         if not any(re.search(rule["pattern"], text) for text in spellings):
             continue
-        if rule.get("allow_in_temp") and safe_temp_delete(command, cwd):
+        if rule.get("allow_in_temp") and safe_temp_delete(command, cwd, rule["pattern"]):
             continue
         if any(entry.get("rule") == rule["id"] and re.fullmatch(entry.get("command", r"(?!)"), flat)
                for entry in allowlist):

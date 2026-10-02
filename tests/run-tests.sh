@@ -137,9 +137,19 @@ for OUTSIDE in "rm -rf /tmp" \
                "rm -rf /tmp/../etc/guardrails" \
                "rm -rf \"\$UNSET_DIR/build\"" \
                "rm -rf $LINK" \
-               "echo 'rm -rf ~'; rm -rf ~/projects"; do
+               "echo 'rm -rf ~'; rm -rf ~/projects" \
+               "rm -rf ~/projects/build -- /tmp/x" \
+               "rm -rf /tmp/x; sh -c 'rm -rf ~/projects'" \
+               "rm -rf /tmp/x; find ~/projects -exec rm -rf {} +" \
+               "$(printf 'rm -rf /tmp/x; bash <<EOF\nrm -rf ~/projects\nEOF')" \
+               "TMPDIR=\$HOME; rm -rf \"\$TMPDIR/projects\"" \
+               "cd /tmp/guardrails-no-such-dir; rm -rf x" \
+               "pushd ~; rm -rf projects" \
+               "cd ~ && (cd /tmp) && rm -rf projects" \
+               "rm -rf {/tmp/x,~/projects}" \
+               "rm -rf ~root/projects"; do
   OUT="$(run_in "$OUTSIDE")"; RC=$?
-  [ "$RC" -eq 2 ] || { TEMP_OK=0; bad "26 a recursive delete that reaches outside temp is refused" "$OUTSIDE -> exit $RC: $OUT"; break; }
+  [ "$RC" -eq 2 ] || { TEMP_OK=0; bad "26 a recursive delete that reaches outside temp is refused" "$OUTSIDE -> exit $RC: $OUT"; }
 done
 [ "$TEMP_OK" -eq 1 ] && ok "26 temp itself, a mixed list, .., an unknown variable or a link out of temp stay refused"
 rm "$LINK"
