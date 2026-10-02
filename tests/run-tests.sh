@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # The suite. Every case runs a real guard against a real payload in a throwaway
 # project — no mocks, so a guard that quietly stops blocking fails here.
-# The command guard writes no state, so cases 1-6 share one fixture; every
-# stateful case gets its own.
+# Cases 1-6 share one fixture: the command guard writes nothing but its
+# decision log, which none of them reads. Every stateful case gets its own.
 set -u
 cd "$(dirname "$0")" || exit 1
 . ./fixture.sh
