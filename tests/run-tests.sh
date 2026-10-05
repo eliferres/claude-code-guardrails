@@ -660,15 +660,15 @@ every_exit 0 "53 a reserved word as an argument is only a word" \
   "echo if then { rm" \
   "if true; then git push origin feature; fi"
 
-# After a branch, a loop, a brace group or a pushd the folder is unknown, so a
-# relative write target cannot be placed; one carrying a protected file's name
-# is refused wherever it might land.
-every_exit 2 "54 a relative write into a protected name after the folder is lost is refused" \
+# In or after a branch, a loop or a brace group, a relative write is checked in
+# every folder the command may be in; after a move the guard cannot read (cd -),
+# one carrying a protected file's name is refused wherever it might land.
+every_exit 2 "54 a relative write into a protected name in a branch or after a lost folder is refused" \
   "{ cp x guardrails.json; }" \
   "if true; then echo x > guardrails.json; fi" \
   "{ true; }; echo x > guardrails.json" \
   "pushd rules; echo x > team-rules.md" \
-  "cd /tmp && { cd ~; }; printf x | tee ../guardrails.json"
+  "cd /tmp && cd -; printf x | tee guardrails.json"
 every_exit 0 "55 a relative write to an unprotected name after the folder is lost passes" \
   "if true; then echo x > notes/scratch.txt; fi"
 
@@ -742,6 +742,27 @@ every_exit 2 "68 a write after pushd lands in the folder pushd named" \
 every_exit 0 "69 a write after pushd or popd into an ordinary folder passes" \
   "pushd notes; echo x > out.txt" \
   "pushd tools; popd; echo x > a.sh"
+
+# A cd the guard can read is followed even inside a group or a branch, where
+# it may or may not run, so a write after it is checked in every folder the
+# command may be in. A move it cannot read loses the folder, and then a write
+# is matched by name alone, where tools/* takes any name.
+every_exit 2 "72 a write after a readable move in a branch, or after an unreadable move, is checked" \
+  "{ cd tools; }; echo x > a.sh" \
+  "if true; then cd tools; fi; echo x > a.sh" \
+  "cd tools && cd .. && cd - && echo x > a.sh" \
+  "pushd -n tools; pushd; echo x > a.sh" \
+  "pushd tools; pushd ..; pushd +1; echo x > a.sh" \
+  "CDPATH=. cd tools; echo x > a.sh" \
+  "echo x > tool{s..s}/a.sh"
+every_exit 0 "73 ordinary writes in and after groups, branches and loops pass" \
+  "if [ -f x ]; then echo ok > notes/a.txt; fi" \
+  "for f in *.md; do cat \"\$f\" > out/\$f; done" \
+  "{ echo a; echo b; } > build.log" \
+  "if true; then echo x > out/settings.json; fi" \
+  "if true; then echo x > out/tools/a.sh; fi" \
+  "git push origin main" \
+  "rm -rf /tmp/build-xyz"
 
 # The shell expands a brace list in the command word too: {rm,-rf,x} runs rm -rf x.
 every_exit 2 "66 a brace list in the command word is read expanded" \

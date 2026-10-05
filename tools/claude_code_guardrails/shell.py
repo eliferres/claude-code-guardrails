@@ -5,7 +5,7 @@ import glob
 import os
 import re
 import shlex
-from typing import Dict, FrozenSet, Iterator, List, NamedTuple, Optional, Tuple
+from typing import Dict, FrozenSet, Iterator, List, NamedTuple, Optional, Set, Tuple
 
 from .git_rules import canonical_git_args
 
@@ -402,9 +402,13 @@ def normalized_command(command: str, depth: int = 0) -> Optional[str]:
 
 def reassigned_names(command: str) -> FrozenSet[str]:
     """$HOME and $TMPDIR are read from the guard's own environment, which is only
-    right when the command does not set them itself (`TMPDIR=$HOME; rm -rf ...`)."""
+    right when the command does not set them itself (`TMPDIR=$HOME; rm -rf ...`).
+    CDPATH, set anywhere, sends a relative cd to a folder this reading cannot name."""
     bare = re.sub(r"\$\{?(?:HOME|TMPDIR)\}?", "", command)
-    return frozenset(name for name in ("HOME", "TMPDIR") if re.search(r"\b%s\b" % name, bare))
+    names = {name for name in ("HOME", "TMPDIR") if re.search(r"\b%s\b" % name, bare)}
+    if re.search(r"\bCDPATH\b", command) or os.environ.get("CDPATH"):
+        names.add("CDPATH")
+    return frozenset(names)
 
 
 # More words than this from one brace list is a command built to hide something.
@@ -414,8 +418,8 @@ BRACE_LIMIT = 1024
 def brace_expansions(word: str) -> List[str]:
     """The words the shell makes of one word by brace expansion: a{b,c}d is abd and
     acd, lists nest, and an alternative that comes out empty drops out. A range
-    ({1..9}, {a..z}) becomes a * glob, read as every name it could make. ${...} is a
-    variable, not a list. Quotes are gone by the time a word is read here, so a
+    ({1..9}, {01..10..3}, {a..z}) makes each of its values. ${...} is a variable,
+    not a list. Quotes are gone by the time a word is read here, so a
     quoted list is expanded too, which can only refuse more. Raises ValueError past
     BRACE_LIMIT words."""
     search = 0
@@ -447,9 +451,40 @@ def brace_expansions(word: str) -> List[str]:
                 if len(words) > BRACE_LIMIT:
                     raise ValueError("a brace list of more than %d words" % BRACE_LIMIT)
             return [w for w in words if w]
-        if ".." in word[start + 1:close]:
-            return brace_expansions(prefix + "*" + suffix)
-        search = start + 1  # {} or {word}: the shell leaves it as written
+        values = brace_range(word[start + 1:close])
+        if values is not None:
+            words = []
+            for value in values:
+                words += brace_expansions(prefix + value + suffix)
+                if len(words) > BRACE_LIMIT:
+                    raise ValueError("a brace list of more than %d words" % BRACE_LIMIT)
+            return words
+        search = start + 1  # {}, {word} or a malformed range: the shell leaves it as written
+
+
+def brace_range(inner: str) -> Optional[List[str]]:
+    """The values of a range written inside braces: 1..5, 05..1..2 (zero-padded,
+    every second), a..e. None when the text is not a range."""
+    numbers = re.fullmatch(r"(-?[0-9]+)\.\.(-?[0-9]+)(?:\.\.(-?[0-9]+))?", inner)
+    letters = re.fullmatch(r"([A-Za-z])\.\.([A-Za-z])(?:\.\.(-?[0-9]+))?", inner)
+    match = numbers or letters
+    if not match:
+        return None
+    first, last, step = match.groups()
+    step_size = abs(int(step or 1)) or 1
+    if letters:
+        a, b = ord(first), ord(last)
+    else:
+        a, b = int(first), int(last)
+    if abs(b - a) // step_size + 1 > BRACE_LIMIT:
+        raise ValueError("a brace range of more than %d values" % BRACE_LIMIT)
+    values = range(a, b + 1, step_size) if a <= b else range(a, b - 1, -step_size)
+    if letters:
+        return [chr(value) for value in values]
+    padded = any(re.match(r"-?0[0-9]", end) for end in (first, last))
+    width = max(len(first), len(last)) if padded else 0
+    return [str(value).zfill(width) if value >= 0 else "-" + str(-value).zfill(width - 1)
+            for value in values]
 
 
 def resolve_word(word: str, cwd: Optional[str], unreadable: FrozenSet[str] = frozenset()) -> Optional[str]:
@@ -495,24 +530,45 @@ def folder_after(name: str, args: List[str], cwd: Optional[str], unreadable: Fro
     rest = operands(args)
     if not rest:
         return None if "HOME" in unreadable else HOME
+    if "CDPATH" in unreadable and not re.match(r"[/~.$]", rest[0]):
+        return None
     folder = resolve_word(rest[0], cwd, unreadable)
     return folder if folder and os.path.isdir(folder) else None  # a cd that fails leaves us guessing
 
 
-def commands_in_folder(command: str, cwd: Optional[str]) -> Iterator[Tuple[str, List[str], List[Tuple[str, str]], Optional[str]]]:
-    """-> (name, args, [(redirect operator, its target)], folder it runs in) per
-    simple command, with the command word in its normalized spelling. A `cd` into
-    an existing folder moves the folder for the commands after it, until the end of
-    the subshell it ran in. `pushd <folder>` moves it the same way, and popd
-    returns to the folder before the matching pushd. Any other cd, pushd or popd
-    leaves the folder unknown (None), so relative paths after it stay unresolved."""
+def moved_places(args: List[str], places: Set[str], certain: bool,
+                 unreadable: FrozenSet[str]) -> Set[str]:
+    """The folders a command may be in after `cd <args>` (or `pushd <folder>`) from
+    any of `places`. Outside every group and branch the cd surely ran; inside or
+    after one it may not have, so the folders before it stay possible. A cd the
+    guard cannot read leaves no folder it can name (the empty set)."""
+    landed = {folder_after("cd", args, place, unreadable) for place in (places or {None})}
+    if None in landed:
+        return set()
+    return {folder for folder in landed if folder} | (set() if certain else places)
+
+
+def commands_in_folder(command: str, cwd: Optional[str]) -> Iterator[
+        Tuple[str, List[str], List[Tuple[str, str]], Optional[str], FrozenSet[str]]]:
+    """-> (name, args, [(redirect operator, its target)], folder it runs in, every
+    folder it may run in) per simple command, with the command word in its
+    normalized spelling. A `cd` into an existing folder moves the folder for the
+    commands after it, until the end of the subshell it ran in. `pushd <folder>`
+    moves it the same way, and popd returns to the folder before the matching
+    pushd. After a group or branch, where a cd may or may not have run, the folder
+    is unknown (None) but the folders it may be are still listed; after a move the
+    guard cannot read (cd -, a variable, CDPATH, pushd +N, eval, source) that list
+    is empty too."""
     unreadable = reassigned_names(command)
     words: List[str] = []
     redirects: List[Tuple[str, str]] = []
     pending = None
-    pushed: List[Optional[str]] = []  # the folder before each pushd still open
-    # The folder, and the pushd stack, outside each open subshell.
-    outer: List[Tuple[Optional[str], List[Optional[str]]]] = []
+    places: Set[str] = {cwd} if cwd else set()
+    branched = False  # past a group or branch: a later move may not have run
+    # The folder, and where it may be, before each pushd still open.
+    pushed: List[Tuple[Optional[str], Set[str]]] = []
+    # The folder, where it may be, and the pushd stack, outside each open subshell.
+    outer: List[Tuple[Optional[str], Set[str], List[Tuple[Optional[str], Set[str]]]]] = []
     in_backtick = False
     for kind, text in command_tokens(command) + [("op", "\n")]:
         if kind == "redirect":
@@ -527,24 +583,29 @@ def commands_in_folder(command: str, cwd: Optional[str]) -> Iterator[Tuple[str, 
             continue
         if words or redirects:
             name, args = (words[0], words[1:]) if words else ("", [])
-            yield name, args, redirects, cwd
-            if name == "pushd" and len(args) == 1 and not re.match(r"[+-]", args[0]):
-                pushed.append(cwd)
+            yield name, args, redirects, cwd, frozenset(places)
+            if name in ("cd", "pushd") and (name == "cd" or len(args) == 1 and not re.match(r"[+-]", args[0])):
+                if name == "pushd":
+                    pushed.append((cwd, set(places)))
                 cwd = folder_after("cd", args, cwd, unreadable)
+                places = moved_places(args, places, not branched, unreadable)
             elif name == "popd" and not args and pushed:
-                cwd = pushed.pop()
-            elif name in ("pushd", "popd"):  # no folder, +N, -N or -n: the stack is lost too
-                cwd, pushed = None, []
+                cwd, before = pushed.pop()
+                places = before if not branched else places | before
+            elif name in ("pushd", "popd", "eval", "source", "."):
+                # No folder, +N, -N or -n, or text the guard never parsed: lost.
+                cwd, places, pushed = None, set(), []
             else:
                 cwd = folder_after(name, args, cwd, unreadable)
+                branched = branched or name in FOLDER_HIDING_WORDS
         words, redirects, pending = [], [], None
         if text in FOLDER_HIDING_WORDS:
-            cwd = None
+            cwd, branched = None, True
         opens = text == "(" or (text == "`" and not in_backtick)
         closes = text == ")" or (text == "`" and in_backtick)
         if text == "`":
             in_backtick = not in_backtick
         if opens:
-            outer.append((cwd, list(pushed)))
+            outer.append((cwd, set(places), list(pushed)))
         elif closes and outer:
-            cwd, pushed = outer.pop()
+            cwd, places, pushed = outer.pop()

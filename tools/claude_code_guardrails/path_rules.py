@@ -59,7 +59,7 @@ def deletes_only_temp(command: str, cwd: Optional[str]) -> bool:
                                   for root in roots)
 
     found = False
-    for name, args, _, folder in commands_in_folder(command, cwd):
+    for name, args, _, folder, _ in commands_in_folder(command, cwd):
         if name == "cd":
             if not inside(folder_after(name, args, folder, unreadable), or_root=True):
                 return False
