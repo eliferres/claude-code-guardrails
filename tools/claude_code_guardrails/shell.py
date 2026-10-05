@@ -5,7 +5,7 @@ import glob
 import os
 import re
 import shlex
-from typing import Dict, FrozenSet, Iterator, List, Optional, Tuple
+from typing import Any, Dict, FrozenSet, Iterator, List, Optional, Tuple
 
 from .git_rules import canonical_git_args
 
@@ -17,6 +17,32 @@ REDIRECT = re.compile(r"[0-9]*(?:&>>|&>|>>|>\||>&|>|<<<|<<-|<<|<&|<>|<)")
 OPERATORS = ("&&", "||", "|&", ";;", ";", "|", "&", "(", ")", "`", "\n")
 HOME = os.path.expanduser("~")
 
+def heredoc_openers(line: str) -> List[Any]:
+    """The heredoc openers on one line. A << inside quotes or a comment is text: read
+    as an opener, it would swallow the real commands after it as a body."""
+    openers, quote, i = [], "", 0
+    starts = {match.start(): match for match in HEREDOC.finditer(line)}
+    while i < len(line):
+        c = line[i]
+        if quote:
+            if c == "\\" and quote == '"':
+                i += 1
+            elif c == quote:
+                quote = ""
+        elif c == "\\":
+            i += 1
+        elif c in "'\"":
+            quote = c
+        elif c == "#" and (i == 0 or line[i - 1] in " \t;&|("):
+            break
+        elif i in starts:
+            openers.append(starts[i])
+            i = starts[i].end()
+            continue
+        i += 1
+    return openers
+
+
 def strip_heredoc_bodies(command: str) -> str:
     kept, pending = [], []
     for line in command.split("\n"):
@@ -25,7 +51,7 @@ def strip_heredoc_bodies(command: str) -> str:
                 pending.pop(0)
             continue
         kept.append(line)
-        pending.extend(match.group(2) for match in HEREDOC.finditer(line))
+        pending.extend(match.group(2) for match in heredoc_openers(line))
     return "\n".join(kept)
 
 

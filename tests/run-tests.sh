@@ -368,6 +368,24 @@ fi
 if [ "$RC" -eq 2 ] && has "apostrophe" "$OUT" && [ "$RC2" -eq 0 ] && [ "$ZSH_RC" -eq 2 ]; then
   ok "48 python3.X -c bodies are checked, and a zsh script is parsed by zsh"
 else bad "48 versioned python and zsh scripts" "exit $RC/$RC2/$ZSH_RC: $OUT $OUT2 ${OUT3:-}"; fi
+
+# << inside quotes is text, not a heredoc: it must neither hide the next
+# command from the shell-write check nor turn real heredoc bodies into code.
+OUT="$(bash_payload_cwd "$(printf 'echo "<<X"\necho x > guardrails.json')" "$P" \
+  | GUARDRAILS_PROJECT_DIR="$P" bash "$CMD_GUARD" 2>&1)"; RC=$?
+cat > "$P/quoted.sh" <<'BODY'
+#!/usr/bin/env bash
+echo "a heredoc starts with <<EOF"
+cat > "$TMPDIR/example.sh" <<'DATA'
+python3 -c '
+# the user's own text, kept as data
+'
+DATA
+BODY
+OUT2="$(write_file hook.sh "$(cat "$P/quoted.sh")")"; RC2=$?
+if [ "$RC" -eq 2 ] && [ "$RC2" -eq 0 ]; then
+  ok "49 << inside quotes is not a heredoc for the command guard or the syntax guard"
+else bad "49 quoted << is text" "exit $RC/$RC2: $OUT $OUT2"; fi
 rm -r "$P"
 
 # ---------------------------------------------------------------- pre-push secret scan

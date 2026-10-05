@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from .config import guard_config, project_dir, target_path
 from .decisions import deny, hook_input
 from .path_rules import matched_pattern
-from .shell import HEREDOC
+from .shell import heredoc_openers
 
 
 # `python3 -c '` followed by its body, with any flags (and one flag value) between.
@@ -55,7 +55,7 @@ def heredoc_bodies(script: str) -> List[Tuple[int, int, str, Any]]:
                 pending.pop(0)
                 start = None
         else:
-            pending = [(match, line) for match in HEREDOC.finditer(line)]
+            pending = [(match, line) for match in heredoc_openers(line)]
         offset += len(line) + 1
     return bodies
 
