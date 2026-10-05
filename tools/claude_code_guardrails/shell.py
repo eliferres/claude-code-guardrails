@@ -370,6 +370,51 @@ def reassigned_names(command: str) -> FrozenSet[str]:
     return frozenset(name for name in ("HOME", "TMPDIR") if re.search(r"\b%s\b" % name, bare))
 
 
+# More words than this from one brace list is a command built to hide something.
+BRACE_LIMIT = 1024
+
+
+def brace_expansions(word: str) -> List[str]:
+    """The words the shell makes of one word by brace expansion: a{b,c}d is abd and
+    acd, lists nest, and an alternative that comes out empty drops out. A range
+    ({1..9}, {a..z}) becomes a * glob, read as every name it could make. ${...} is a
+    variable, not a list. Quotes are gone by the time a word is read here, so a
+    quoted list is expanded too, which can only refuse more. Raises ValueError past
+    BRACE_LIMIT words."""
+    search = 0
+    while True:
+        start = next((i for i in range(search, len(word))
+                      if word[i] == "{" and (i == 0 or word[i - 1] != "$")), None)
+        if start is None:
+            return [word]
+        depth, commas, close = 0, [], None
+        for i in range(start, len(word)):
+            if word[i] == "{":
+                depth += 1
+            elif word[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    close = i
+                    break
+            elif word[i] == "," and depth == 1:
+                commas.append(i)
+        if close is None:  # unmatched: the shell leaves it, and reads on for a later list
+            search = start + 1
+            continue
+        prefix, suffix = word[:start], word[close + 1:]
+        if commas:
+            cuts = [start] + commas + [close]
+            words: List[str] = []
+            for a, b in zip(cuts, cuts[1:]):
+                words += brace_expansions(prefix + word[a + 1:b] + suffix)
+                if len(words) > BRACE_LIMIT:
+                    raise ValueError("a brace list of more than %d words" % BRACE_LIMIT)
+            return [w for w in words if w]
+        if ".." in word[start + 1:close]:
+            return brace_expansions(prefix + "*" + suffix)
+        search = start + 1  # {} or {word}: the shell leaves it as written
+
+
 def resolve_word(word: str, cwd: Optional[str], unreadable: FrozenSet[str] = frozenset()) -> Optional[str]:
     """A shell word as a real absolute path, or None when it depends on something
     this guard cannot see: a variable other than $HOME or $TMPDIR (or one of those

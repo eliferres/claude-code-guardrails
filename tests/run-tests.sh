@@ -687,6 +687,20 @@ every_exit 2 "56 a heredoc delimiter of any shape ends where the shell ends it" 
 every_exit 0 "57 a heredoc body is data until its exact end line" \
   "$(lines 'cat <<"E"OF' 'echo x > guardrails.json' 'EOF')" \
   "$(lines 'cat <<EOF' 'echo x > guardrails.json' ' EOF' 'echo x > guardrails.json')"
+
+# The shell expands a brace list before it writes, so the target is every word
+# the list expands to.
+every_exit 2 "58 a brace list that expands to a protected name is refused" \
+  "printf x | tee {guardrails.json,}" \
+  "cp x {guardrails.json,}" \
+  "echo x > {guardrails.json,}" \
+  "echo x > guard{rails,ed}.json" \
+  "echo x > rules/{notes,{team,x}-rules}.md" \
+  "echo x > guardrail{r..t}.json" \
+  "if true; then echo x > {guardrails.json,}; fi"
+every_exit 0 "59 a brace list that expands to ordinary names passes" \
+  "echo x > notes/{a,b}.txt" \
+  "cp {guardrails.json,notes/copy.json}"
 rm -r "$P"
 
 printf '\n%d passed, %d failed\n' "$PASSED" "$FAILED"

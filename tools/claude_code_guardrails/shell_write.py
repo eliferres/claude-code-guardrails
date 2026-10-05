@@ -8,7 +8,7 @@ from typing import FrozenSet, List, Optional, Tuple
 from .config import config_path, guard_config, project_dir
 from .decisions import deny
 from .path_rules import matched_pattern, path_matches
-from .shell import commands_in_folder, operands, reassigned_names, resolve_word
+from .shell import brace_expansions, commands_in_folder, operands, reassigned_names, resolve_word
 
 
 def copy_destinations(args: List[str], cwd: Optional[str], unreadable: FrozenSet[str]) -> List[str]:
@@ -32,14 +32,17 @@ def copy_destinations(args: List[str], cwd: Optional[str], unreadable: FrozenSet
 
 
 def written_paths(command: str, cwd: Optional[str]) -> Tuple[List[str], List[str]]:
-    """Every file this command writes through a redirect, tee, sed -i, cp or mv:
+    """Every file this command writes through a redirect, tee, sed -i, cp or mv,
+    after brace expansion:
     (the ones resolved to a real path, the relative ones written in a folder the
     guard lost track of, as written)."""
     unreadable = reassigned_names(command)
     found, unplaced = [], []
     for name, args, redirects, folder in commands_in_folder(command, cwd):
-        targets = [target for op, target in redirects
-                   if ">" in op and not (op.endswith("&") and re.fullmatch(r"[0-9]+|-", target))]
+        args = [word for arg in args for word in brace_expansions(arg)]
+        targets = [word for op, target in redirects
+                   if ">" in op and not (op.endswith("&") and re.fullmatch(r"[0-9]+|-", target))
+                   for word in brace_expansions(target)]
         if name == "tee":
             targets += operands(args)
         elif name == "sed" and any(re.match(r"^-[a-zA-Z]*i|^--in-place", arg) for arg in args):
