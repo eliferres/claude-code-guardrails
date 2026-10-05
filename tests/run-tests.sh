@@ -719,6 +719,21 @@ every_exit 2 "63 a brace list in rm or git push arguments is read expanded" \
   "git push origin {+main,}"
 rm -r "$P"
 
+# With the shipped config, which protects tools/*. A relative write after the
+# folder is lost is placed in the last folder the guard knew, and a pattern
+# ending in a bare * is matched against the path as written, not its name
+# alone, so ordinary writes after a branch pass.
+P="$(make_project)"
+cp "$ROOT/guardrails.json" "$P/guardrails.json"
+mkdir -p "$P/tools"
+every_exit 0 "64 with the shipped config, an ordinary relative write after a branch passes" \
+  "if true; then echo x > notes/out.txt; fi"
+every_exit 2 "65 with the shipped config, a protected relative write after a branch is refused" \
+  "if true; then echo x > tools/x.py; fi" \
+  "{ true; }; echo x > guardrails.json" \
+  "cd tools && if true; then echo x > a.sh; fi"
+rm -r "$P"
+
 # Claude Code reads any exit but 2 as allow, so a guard that crashes would
 # wave the call through. A rule whose pattern is not a regex crashes the guard.
 P="$(make_project)"

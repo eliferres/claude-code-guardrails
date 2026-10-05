@@ -104,9 +104,10 @@ to the same paths: it reads the command the way the shell would (quotes,
 redirects without spaces, brace lists, heredocs, a `cd` earlier in the line)
 and refuses a write into a protected file whatever token is open, pointing back
 to the file tools. After a branch, a loop, a brace group, `pushd`, `eval` or
-`source` it no longer knows the folder, so there it refuses any relative write
-whose file name matches the last part of a protected pattern (with `tools/*`
-protected, that is every relative write). It reads the writes a redirect, `tee`,
+`source` it no longer knows the folder, so there it checks a relative write
+twice: in the last folder it knew, and by name, refusing one whose file name
+matches the last part of a protected pattern or, for a pattern ending in a bare
+`*` such as `tools/*`, whose path names that folder (`tools/x.py`). It reads the writes a redirect, `tee`,
 `sed -i`, `cp` and `mv` make, and these pass: any other program that writes
 (`dd`, `install`, `rsync`, `perl -i`, a script), a path built from a command
 substitution or from a variable other than `$HOME` and `$TMPDIR` (or one of those

@@ -8,7 +8,7 @@ from typing import FrozenSet, List, Optional, Tuple
 from .config import config_path, guard_config, project_dir
 from .decisions import deny
 from .path_rules import matched_pattern, path_matches
-from .shell import brace_expansions, commands_in_folder, operands, reassigned_names, resolve_word
+from .shell import brace_expansions, commands_in_folder, folder_after, operands, reassigned_names, resolve_word
 
 
 def copy_destinations(args: List[str], cwd: Optional[str], unreadable: FrozenSet[str]) -> List[str]:
@@ -33,12 +33,17 @@ def copy_destinations(args: List[str], cwd: Optional[str], unreadable: FrozenSet
 
 def written_paths(command: str, cwd: Optional[str]) -> Tuple[List[str], List[str]]:
     """Every file this command writes through a redirect, tee, sed -i, cp or mv,
-    after brace expansion:
-    (the ones resolved to a real path, the relative ones written in a folder the
-    guard lost track of, as written)."""
+    after brace expansion: (the ones resolved to a real path, the relative ones
+    written in a folder the guard lost track of, as written). A relative one of
+    those is also resolved in the last folder the guard knew, the likeliest place
+    it lands, so it is in both lists."""
     unreadable = reassigned_names(command)
     found, unplaced = [], []
+    last_known = cwd
     for name, args, redirects, folder in commands_in_folder(command, cwd):
+        place = folder if folder is not None else last_known
+        if folder is not None:
+            last_known = folder_after(name, args, folder, unreadable) or folder
         args = [word for arg in args for word in brace_expansions(arg)]
         targets = [word for op, target in redirects
                    if ">" in op and not (op.endswith("&") and re.fullmatch(r"[0-9]+|-", target))
@@ -48,13 +53,12 @@ def written_paths(command: str, cwd: Optional[str]) -> Tuple[List[str], List[str
         elif name == "sed" and any(re.match(r"^-[a-zA-Z]*i|^--in-place", arg) for arg in args):
             targets += operands(args)
         elif name in ("cp", "mv"):
-            targets += copy_destinations(args, folder, unreadable)
+            targets += copy_destinations(args, place, unreadable)
         for target in targets:
-            path = resolve_word(target, folder, unreadable)
+            path = resolve_word(target, place, unreadable)
             if path and path != "/dev/null":
                 found.append(path)
-            elif path is None and folder is None and not re.match(r"[/~]", target) \
-                    and not re.search(r"[$`]", target):
+            if folder is None and not re.match(r"[/~]", target) and not re.search(r"[$`]", target):
                 unplaced.append(target)
     return found, unplaced
 
@@ -80,11 +84,18 @@ def protected_match(path: str, protected: List[str], root: str) -> Optional[str]
 def unplaced_match(target: str, protected: List[str]) -> Optional[str]:
     """The protected pattern a relative target written in an unknown folder could
     hit. That folder could be any folder, so the target hits every pattern whose
-    last part its name matches."""
-    name = os.path.basename(target.rstrip("/"))
+    last part its name matches. A pattern whose last part is a bare * (tools/*)
+    names a folder, not a file name, so there the target must name that folder
+    too (tools/x.py, ../tools/x.py)."""
+    written = re.sub(r"^(\./)+", "", target.rstrip("/"))
+    name = os.path.basename(written)
     for pattern in protected:
         last = os.path.basename(pattern)
-        if path_matches(name, last) or (re.search(r"[*?[]", name) and path_matches(last, name)):
+        if re.fullmatch(r"\*+", last) and os.path.basename(os.path.dirname(pattern)):
+            folder = os.path.basename(os.path.dirname(pattern)) + "/*"
+            if path_matches(written, folder) or path_matches(written, "*/" + folder):
+                return pattern
+        elif path_matches(name, last) or (re.search(r"[*?[]", name) and path_matches(last, name)):
             return pattern
     return None
 
