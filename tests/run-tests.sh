@@ -74,10 +74,10 @@ for WRITE in "echo x > rules/team-rules.md" \
              "cd rules && echo x > team-rules.md"; do
   OUT="$(run_in "$WRITE")"; RC=$?
   if [ "$RC" -ne 2 ] || ! has "shell-write-protected" "$OUT"; then
-    SHELL_OK=0; bad "21 a shell write into a protected file is refused" "$WRITE -> exit $RC: $OUT"; break
+    SHELL_OK=0; bad "7  a shell write into a protected file is refused" "$WRITE -> exit $RC: $OUT"; break
   fi
 done
-[ "$SHELL_OK" -eq 1 ] && ok "21 a redirect, tee, sed -i, cp or mv into a protected file is refused"
+[ "$SHELL_OK" -eq 1 ] && ok "7  a redirect, tee, sed -i, cp or mv into a protected file is refused"
 
 SHELL_OK=1
 for READ in "cat rules/team-rules.md > /tmp/copy.md" \
@@ -86,9 +86,9 @@ for READ in "cat rules/team-rules.md > /tmp/copy.md" \
             "echo x > notes/scratch.md" \
             "git commit -m 'never > rules/team-rules.md'"; do
   OUT="$(run_in "$READ")"; RC=$?
-  [ "$RC" -eq 0 ] || { SHELL_OK=0; bad "22 reads and writes elsewhere pass" "$READ -> exit $RC: $OUT"; break; }
+  [ "$RC" -eq 0 ] || { SHELL_OK=0; bad "8  reads and writes elsewhere pass" "$READ -> exit $RC: $OUT"; break; }
 done
-[ "$SHELL_OK" -eq 1 ] && ok "22 reading a protected file, or writing anywhere else, passes"
+[ "$SHELL_OK" -eq 1 ] && ok "8  reading a protected file, or writing anywhere else, passes"
 
 # The same command spelled the ways a shell still runs it: quoted or escaped,
 # by full path, through a wrapper or an alias, or in capitals, which a
@@ -105,16 +105,16 @@ for SPELLING in "RM -rf ~/projects/build" \
                 "/bin/cp /tmp/new.json guardrails.json" \
                 "env LC_ALL=C SED -i s/a/b/ rules/team-rules.md"; do
   OUT="$(run_in "$SPELLING")"; RC=$?
-  [ "$RC" -eq 2 ] || { SPELL_OK=0; bad "23 another spelling of a refused command is refused" "$SPELLING -> exit $RC: $OUT"; break; }
+  [ "$RC" -eq 2 ] || { SPELL_OK=0; bad "9  another spelling of a refused command is refused" "$SPELLING -> exit $RC: $OUT"; break; }
 done
-[ "$SPELL_OK" -eq 1 ] && ok "23 quoting, a full path, env, command, an alias or capitals do not change the verdict"
+[ "$SPELL_OK" -eq 1 ] && ok "9  quoting, a full path, env, command, an alias or capitals do not change the verdict"
 
 SPELL_OK=1
 for SAFE in "echo RM -rf" "ls -l /bin/rm" "alias ll='ls -la'; ll" "GIT add src/main.py"; do
   OUT="$(run_in "$SAFE")"; RC=$?
-  [ "$RC" -eq 0 ] || { SPELL_OK=0; bad "24 safe commands in other spellings pass" "$SAFE -> exit $RC: $OUT"; break; }
+  [ "$RC" -eq 0 ] || { SPELL_OK=0; bad "10 safe commands in other spellings pass" "$SAFE -> exit $RC: $OUT"; break; }
 done
-[ "$SPELL_OK" -eq 1 ] && ok "24 a spelling pass reads the command word only, so safe commands still pass"
+[ "$SPELL_OK" -eq 1 ] && ok "10 a spelling pass reads the command word only, so safe commands still pass"
 
 # Recursive deletes inside the system temp folders. $P itself lives under
 # $TMPDIR, which is why the cases above aim at a home path instead.
@@ -125,9 +125,9 @@ for TEMPDEL in "rm -rf /tmp/guardrails-scratch" \
                "cd /tmp && /bin/RM -rf guardrails-scratch" \
                "rm -rf notes"; do
   OUT="$(run_in "$TEMPDEL")"; RC=$?
-  [ "$RC" -eq 0 ] || { TEMP_OK=0; bad "25 a recursive delete inside temp passes" "$TEMPDEL -> exit $RC: $OUT"; break; }
+  [ "$RC" -eq 0 ] || { TEMP_OK=0; bad "11 a recursive delete inside temp passes" "$TEMPDEL -> exit $RC: $OUT"; break; }
 done
-[ "$TEMP_OK" -eq 1 ] && ok "25 a recursive delete whose every target is inside a temp folder passes"
+[ "$TEMP_OK" -eq 1 ] && ok "11 a recursive delete whose every target is inside a temp folder passes"
 
 LINK="$P/notes/home-link"
 ln -s "$HOME" "$LINK"
@@ -149,9 +149,9 @@ for OUTSIDE in "rm -rf /tmp" \
                "rm -rf {/tmp/x,~/projects}" \
                "rm -rf ~root/projects"; do
   OUT="$(run_in "$OUTSIDE")"; RC=$?
-  [ "$RC" -eq 2 ] || { TEMP_OK=0; bad "26 a recursive delete that reaches outside temp is refused" "$OUTSIDE -> exit $RC: $OUT"; }
+  [ "$RC" -eq 2 ] || { TEMP_OK=0; bad "12 a recursive delete that reaches outside temp is refused" "$OUTSIDE -> exit $RC: $OUT"; }
 done
-[ "$TEMP_OK" -eq 1 ] && ok "26 temp itself, a mixed list, .., an unknown variable or a link out of temp stay refused"
+[ "$TEMP_OK" -eq 1 ] && ok "12 temp itself, a mixed list, .., an unknown variable or a link out of temp stay refused"
 rm "$LINK"
 
 # every_exit <code> <label> <command>...: each command, run through the command
@@ -168,13 +168,13 @@ every_exit() {
 
 # zsh reads w(:h:h:h) as w with its last three path parts dropped, so a target
 # that looks like temp can expand to /.
-every_exit 2 "35 a target carrying a zsh glob qualifier keeps the refusal" \
+every_exit 2 "13 a target carrying a zsh glob qualifier keeps the refusal" \
   "mkdir -p /tmp/gr-q/w && rm -rf /tmp/gr-q/w(:h:h:h)" \
   "rm -rf /tmp/gr-q/w(:h:h:h)"
 
 # A cd inside a brace group, an if, or run through eval or source still moves
 # the shell, so after one the guard no longer knows the folder.
-every_exit 2 "36 a cd the guard cannot follow leaves the folder unknown" \
+every_exit 2 "14 a cd the guard cannot follow leaves the folder unknown" \
   "cd /tmp && { cd ~; }; rm -rf build" \
   "cd /tmp && if true; then cd ~; fi; rm -rf zz" \
   "cd /tmp && eval cd ~ && rm -rf zz" \
@@ -182,7 +182,7 @@ every_exit 2 "36 a cd the guard cannot follow leaves the folder unknown" \
 
 # The guard resolves paths before the command runs, so anything earlier in the
 # line can change what a temp path points at by the time rm reaches it.
-every_exit 2 "37 the temp allowance needs a line of nothing but rm and cd into temp" \
+every_exit 2 "15 the temp allowance needs a line of nothing but rm and cd into temp" \
   "ln -s ~ /tmp/gr-l; rm -rf /tmp/gr-l/" \
   "mv ~/projects /tmp/gr-dd; rm -rf /tmp/gr-dd" \
   "cd ~ && rm -rf /tmp/gr-x" \
@@ -190,27 +190,27 @@ every_exit 2 "37 the temp allowance needs a line of nothing but rm and cd into t
 
 # $'...' takes backslash escapes, so \' does not end it; and a write the guard
 # cannot parse at all is refused rather than waved through.
-every_exit 2 "38 an ANSI-C quoted word or an unparseable write cannot reach a protected file" \
+every_exit 2 "16 an ANSI-C quoted word or an unparseable write cannot reach a protected file" \
   "echo \$'it\\'s' > guardrails.json" \
   "echo \"unclosed > guardrails.json" \
   "printf x | tee 'guardrails.json"
-every_exit 0 "39 ANSI-C quoting elsewhere still passes" \
+every_exit 0 "17 ANSI-C quoting elsewhere still passes" \
   "echo \$'it\\'s' > notes/scratch.md"
 
 # The shell expands a glob in a write target before writing, so the target is
 # every file it matches; one that could match a protected name is refused.
-every_exit 2 "40 a glob write target that matches or could match a protected file is refused" \
+every_exit 2 "18 a glob write target that matches or could match a protected file is refused" \
   "echo x > g*.json" \
   "echo x > rules/team-rules.m?" \
   "printf x | tee guard[r]ails.json" \
   "cp /tmp/new.md r*/team-rules.md" \
   "echo x > ./guardrails.js?n"
-every_exit 0 "41 a glob write target that matches only ordinary files passes" \
+every_exit 0 "19 a glob write target that matches only ordinary files passes" \
   "echo x > notes/scr*.md"
 
 # Flags in any order, cluster or long form, separators the shell expands, a
 # command word the shell globs, and a command handed to sh -c or eval.
-every_exit 2 "43 rm and git push are read by their arguments, not their text" \
+every_exit 2 "20 rm and git push are read by their arguments, not their text" \
   "rm -r --force ~/projects" \
   "rm -rv -f ~/projects" \
   "rm --recursive -f ~/projects" \
@@ -225,7 +225,7 @@ every_exit 2 "43 rm and git push are read by their arguments, not their text" \
   "git push origin +HEAD:refs/heads/master" \
   "git -c core.askpass=true push -f origin main" \
   "git --no-pager -C . push --force origin main"
-every_exit 0 "44 the narrower forms stay allowed" \
+every_exit 0 "21 the narrower forms stay allowed" \
   "git push --force-with-lease origin main" \
   "git push -u origin main" \
   "git push origin +feature" \
@@ -238,8 +238,8 @@ if [ "$(uname)" = Darwin ]; then CASE_WANT=2; else CASE_WANT=0; fi
 OUT="$(write_payload "$P/GUARDRAILS.JSON" | GUARDRAILS_PROJECT_DIR="$P" bash "$LOCK_GUARD" 2>&1)"; RC=$?
 OUT2="$(run_in "echo x > Rules/Team-Rules.MD")"; RC2=$?
 if [ "$RC" -eq "$CASE_WANT" ] && [ "$RC2" -eq "$CASE_WANT" ]; then
-  ok "45 protected names compare case-insensitively on macOS and exactly elsewhere"
-else bad "45 case-insensitive protected names" "want $CASE_WANT, lock exit $RC, shell exit $RC2: $OUT $OUT2"; fi
+  ok "22 protected names compare case-insensitively on macOS and exactly elsewhere"
+else bad "22 case-insensitive protected names" "want $CASE_WANT, lock exit $RC, shell exit $RC2: $OUT $OUT2"; fi
 rm -r "$P"
 
 # ---------------------------------------------------------------- protected-file lock
@@ -248,25 +248,25 @@ P="$(make_project)"
 TARGET="$P/rules/team-rules.md"
 OUT="$(write_payload "$TARGET" | GUARDRAILS_PROJECT_DIR="$P" bash "$LOCK_GUARD" 2>&1)"; RC=$?
 if [ "$RC" -eq 2 ] && has "lock-approve.sh" "$OUT" && has "$TARGET" "$OUT"; then
-  ok "7  a protected write with no token is refused, and the refusal names the mint command"
-else bad "7  a protected write with no token is refused" "exit $RC: $OUT"; fi
+  ok "23 a protected write with no token is refused, and the refusal names the mint command"
+else bad "23 a protected write with no token is refused" "exit $RC: $OUT"; fi
 
 GUARDRAILS_PROJECT_DIR="$P" bash "$ROOT/tools/lock-approve.sh" "rules refresh" "$TARGET" >/dev/null
 OUT="$(write_payload "$TARGET" | GUARDRAILS_PROJECT_DIR="$P" bash "$LOCK_GUARD" 2>&1)"; RC=$?
 if [ "$RC" -eq 0 ]; then
-  ok "8  a minted token lets the named file through"
-else bad "8  a minted token lets the named file through" "exit $RC: $OUT"; fi
+  ok "24 a minted token lets the named file through"
+else bad "24 a minted token lets the named file through" "exit $RC: $OUT"; fi
 
 OUT="$(write_payload "$P/guardrails.json" | GUARDRAILS_PROJECT_DIR="$P" bash "$LOCK_GUARD" 2>&1)"; RC=$?
 if [ "$RC" -eq 2 ] && has "does not cover this file" "$OUT"; then
-  ok "9  a live token does not cover a file outside its batch"
-else bad "9  a live token does not cover a file outside its batch" "exit $RC: $OUT"; fi
+  ok "25 a live token does not cover a file outside its batch"
+else bad "25 a live token does not cover a file outside its batch" "exit $RC: $OUT"; fi
 
 printf 'batch: yesterday\nexpires: 1000000000\nfiles:\n%s\n' "$TARGET" > "$P/.guardrails/lock-approval.token"
 OUT="$(write_payload "$TARGET" | GUARDRAILS_PROJECT_DIR="$P" bash "$LOCK_GUARD" 2>&1)"; RC=$?
 if [ "$RC" -eq 2 ] && has "expired" "$OUT"; then
-  ok "10 an expired token is refused and says so"
-else bad "10 an expired token is refused and says so" "exit $RC: $OUT"; fi
+  ok "26 an expired token is refused and says so"
+else bad "26 an expired token is refused and says so" "exit $RC: $OUT"; fi
 rm -r "$P"
 
 # ---------------------------------------------------------------- cross-session claims
@@ -280,8 +280,8 @@ OUT="$(claim session-beta)"; RC=$?
 GUARDRAILS_PROJECT_DIR="$P" bash "$ROOT/tools/claims-clear.sh" --session session-alpha >/dev/null </dev/null
 AFTER="$(claim session-beta)"; AFTER_RC=$?
 if [ "$RC" -eq 2 ] && has "session-alpha" "$OUT" && has "minutes ago" "$OUT" && [ "$AFTER_RC" -eq 0 ]; then
-  ok "11 the second session is refused naming the holder and its age, and clearing releases it"
-else bad "11 collision is refused with holder and age, then cleared" "exit $RC / after $AFTER_RC: $OUT$AFTER"; fi
+  ok "27 the second session is refused naming the holder and its age, and clearing releases it"
+else bad "27 collision is refused with holder and age, then cleared" "exit $RC / after $AFTER_RC: $OUT$AFTER"; fi
 rm -r "$P"
 
 P="$(make_project)"
@@ -293,8 +293,8 @@ OUT="$(claim session-beta)"; RC=$?
 LEDGER="$(cat "$P/.guardrails/takeover-ledger.jsonl" 2>&1)"
 if [ "$RC" -eq 0 ] && has '"displaced_session": "session-alpha"' "$LEDGER" \
    && has "release is blocked on this file" "$LEDGER"; then
-  ok "12 a takeover lets the winner write and ledgers what the loser was holding"
-else bad "12 a takeover ledgers the displaced session" "exit $RC; ledger: $LEDGER"; fi
+  ok "28 a takeover lets the winner write and ledgers what the loser was holding"
+else bad "28 a takeover ledgers the displaced session" "exit $RC; ledger: $LEDGER"; fi
 rm -r "$P"
 
 # ---------------------------------------------------------------- syntax guard
@@ -306,8 +306,8 @@ write_file() { content_payload "$P/$1" "$2" | GUARDRAILS_PROJECT_DIR="$P" bash "
 OUT="$(write_file hook.sh "$(printf '#!/usr/bin/env bash\nif true; then\n  echo ok\n')")"; RC=$?
 OUT2="$(write_file hook.py "$(printf 'def check(:\n    pass\n')")"; RC2=$?
 if [ "$RC" -eq 2 ] && has "bash -n" "$OUT" && [ "$RC2" -eq 2 ] && has "python line 1" "$OUT2"; then
-  ok "27 a shell or Python file that would not parse is refused before it is written"
-else bad "27 an unparseable shell or Python write is refused" "exit $RC/$RC2: $OUT $OUT2"; fi
+  ok "29 a shell or Python file that would not parse is refused before it is written"
+else bad "29 an unparseable shell or Python write is refused" "exit $RC/$RC2: $OUT $OUT2"; fi
 
 # The shape that motivated this guard: an apostrophe in a comment inside a
 # single-quoted python3 -c body. The quote count stays even, so bash -n passes
@@ -334,8 +334,8 @@ bash -n "$P/apostrophe.sh"; BASH_N=$?
 OUT="$(write_file hook.sh "$APOSTROPHE")"; RC=$?
 OUT2="$(write_file hook.sh "$HEREDOC")"; RC2=$?
 if [ "$BASH_N" -eq 0 ] && [ "$RC" -eq 2 ] && has "apostrophe" "$OUT" && [ "$RC2" -eq 2 ] && has "heredoc PY" "$OUT2"; then
-  ok "28 Python embedded in a shell file is checked: a cut-off -c body and a broken heredoc are refused"
-else bad "28 embedded Python is checked" "bash -n $BASH_N, exit $RC/$RC2: $OUT $OUT2"; fi
+  ok "30 Python embedded in a shell file is checked: a cut-off -c body and a broken heredoc are refused"
+else bad "30 embedded Python is checked" "bash -n $BASH_N, exit $RC/$RC2: $OUT $OUT2"; fi
 
 printf '#!/usr/bin/env bash\necho one\n' > "$P/hook.sh"
 SYNTAX_OK=1
@@ -345,12 +345,12 @@ for CASE in ok-write ok-edit outside-scope; do
     ok-edit) OUT="$(edit_payload "$P/hook.sh" "echo one" "echo two" | GUARDRAILS_PROJECT_DIR="$P" bash "$SYNTAX_GUARD" 2>&1)"; RC=$? ;;
     outside-scope) OUT="$(write_file notes/todo.txt "if then (")"; RC=$? ;;
   esac
-  [ "$RC" -eq 0 ] || { SYNTAX_OK=0; bad "29 parseable or out-of-scope writes pass" "$CASE -> exit $RC: $OUT"; break; }
+  [ "$RC" -eq 0 ] || { SYNTAX_OK=0; bad "31 parseable or out-of-scope writes pass" "$CASE -> exit $RC: $OUT"; break; }
 done
 OUT="$(edit_payload "$P/hook.sh" "echo one" "if true; then" | GUARDRAILS_PROJECT_DIR="$P" bash "$SYNTAX_GUARD" 2>&1)"; RC=$?
 if [ "$SYNTAX_OK" -eq 1 ] && [ "$RC" -eq 2 ] && has "Edit would leave" "$OUT"; then
-  ok "29 a parseable write passes, and an Edit is judged by the whole file it would leave"
-elif [ "$SYNTAX_OK" -eq 1 ]; then bad "29 an Edit that breaks the file is refused" "exit $RC: $OUT"; fi
+  ok "31 a parseable write passes, and an Edit is judged by the whole file it would leave"
+elif [ "$SYNTAX_OK" -eq 1 ]; then bad "31 an Edit that breaks the file is refused" "exit $RC: $OUT"; fi
 
 # A versioned interpreter name runs the same cut-off body, and a zsh script is
 # parsed by zsh: its glob qualifiers are not bash syntax errors.
@@ -366,8 +366,8 @@ if command -v zsh >/dev/null; then
   OUT3="$(write_file hook.sh "$(printf '#!/bin/zsh\nif true; then\n')")"; ZSH_RC=$?
 fi
 if [ "$RC" -eq 2 ] && has "apostrophe" "$OUT" && [ "$RC2" -eq 0 ] && [ "$ZSH_RC" -eq 2 ]; then
-  ok "48 python3.X -c bodies are checked, and a zsh script is parsed by zsh"
-else bad "48 versioned python and zsh scripts" "exit $RC/$RC2/$ZSH_RC: $OUT $OUT2 ${OUT3:-}"; fi
+  ok "32 python3.X -c bodies are checked, and a zsh script is parsed by zsh"
+else bad "32 versioned python and zsh scripts" "exit $RC/$RC2/$ZSH_RC: $OUT $OUT2 ${OUT3:-}"; fi
 
 # << inside quotes is text, not a heredoc: it must neither hide the next
 # command from the shell-write check nor turn real heredoc bodies into code.
@@ -384,8 +384,8 @@ DATA
 BODY
 OUT2="$(write_file hook.sh "$(cat "$P/quoted.sh")")"; RC2=$?
 if [ "$RC" -eq 2 ] && [ "$RC2" -eq 0 ]; then
-  ok "49 << inside quotes is not a heredoc for the command guard or the syntax guard"
-else bad "49 quoted << is text" "exit $RC/$RC2: $OUT $OUT2"; fi
+  ok "33 << inside quotes is not a heredoc for the command guard or the syntax guard"
+else bad "33 quoted << is text" "exit $RC/$RC2: $OUT $OUT2"; fi
 rm -r "$P"
 
 # ---------------------------------------------------------------- pre-push secret scan
@@ -413,8 +413,8 @@ printf 'print("hello")\n' > "$G/work/settings.py"; commit settings.py "drop the 
 OUT="$(push)"; RC=$?
 if [ "$CLEAN_RC" -eq 0 ] && [ "$RC" -ne 0 ] && has "settings.py" "$OUT" && has "aws-access-key" "$OUT" \
    && ! has "$AWS_KEY" "$OUT"; then
-  ok "30 a push adding a key is refused, naming the file and shape, never the value, even if a later commit removed it"
-else bad "30 a push adding a key is refused" "clean $CLEAN_RC, exit $RC: $OUT"; fi
+  ok "34 a push adding a key is refused, naming the file and shape, never the value, even if a later commit removed it"
+else bad "34 a push adding a key is refused" "clean $CLEAN_RC, exit $RC: $OUT"; fi
 
 gitq reset -q --hard HEAD~2
 PEM_HEAD="-----BEGIN ""RSA PRIVATE KEY-----"
@@ -423,8 +423,8 @@ OUT="$(push)"; RC=$?
 printf '# fixtures hold fake keys on purpose\ntests/fixtures/*\n' > "$G/work/.secret-scan-allow"; commit .secret-scan-allow "allow the fixtures"
 OUT2="$(push)"; RC2=$?
 if [ "$RC" -ne 0 ] && has "private-key" "$OUT" && [ "$RC2" -eq 0 ]; then
-  ok "31 a fixture path listed in .secret-scan-allow is skipped; unlisted, the same key is refused"
-else bad "31 the allow-path file skips fixtures" "exit $RC/$RC2: $OUT $OUT2"; fi
+  ok "35 a fixture path listed in .secret-scan-allow is skipped; unlisted, the same key is refused"
+else bad "35 the allow-path file skips fixtures" "exit $RC/$RC2: $OUT $OUT2"; fi
 
 TOKEN_VALUE="Zx81""Qm42Lp07Rt55Vw"
 printf 'api_key: "%s"\nendpoint: "https://example.com"\npassword: "${DB_PASSWORD}"\n' "$TOKEN_VALUE" > "$G/work/config.yml"
@@ -434,8 +434,8 @@ gitq reset -q --hard HEAD~1
 printf 'password: "${DB_PASSWORD}"\napi_key: "your-api-key-here"\n' > "$G/work/config.yml"; commit config.yml "add config template"
 OUT2="$(push)"; RC2=$?
 if [ "$RC" -ne 0 ] && has "generic-secret" "$OUT" && [ "$RC2" -eq 0 ]; then
-  ok "32 a generic key=value secret is refused; a variable reference or a placeholder is not"
-else bad "32 the generic key=value shape" "exit $RC/$RC2: $OUT $OUT2"; fi
+  ok "36 a generic key=value secret is refused; a variable reference or a placeholder is not"
+else bad "36 the generic key=value shape" "exit $RC/$RC2: $OUT $OUT2"; fi
 
 # A commit already on another remote is still new to this one: a key that
 # reached a private mirror must not ride along to a public remote unread.
@@ -445,8 +445,8 @@ printf 'AWS_ACCESS_KEY_ID = "%s"\n' "$AWS_KEY" > "$G/work/deploy.py"; commit dep
 gitq -c core.hooksPath=/dev/null push -q mirror HEAD:refs/heads/release 2>/dev/null
 OUT="$(gitq push -q origin HEAD:refs/heads/release 2>&1)"; RC=$?
 if [ "$RC" -ne 0 ] && has "deploy.py" "$OUT"; then
-  ok "42 commits already on a different remote are still scanned on the way to this one"
-else bad "42 commits on another remote are scanned" "exit $RC: $OUT"; fi
+  ok "37 commits already on a different remote are still scanned on the way to this one"
+else bad "37 commits on another remote are scanned" "exit $RC: $OUT"; fi
 rm -r "$G"
 
 # The shapes themselves, line by line. Each fake value is joined from pieces
@@ -472,8 +472,8 @@ print("\n".join(problems))
 PY
 )"
 if [ -z "$OUT" ]; then
-  ok "47 webhook, SendGrid, Hugging Face, PyPI and webhook-secret shapes are caught; a call or expression is not a secret"
-else bad "47 the added shapes and the generic value check" "$OUT"; fi
+  ok "38 webhook, SendGrid, Hugging Face, PyPI and webhook-secret shapes are caught; a call or expression is not a secret"
+else bad "38 the added shapes and the generic value check" "$OUT"; fi
 
 # ---------------------------------------------------------------- decision log
 
@@ -496,8 +496,8 @@ ROWS="$(cat "$LOG" 2>&1)"
 if has '"guard": "command-guard", "decision": "deny", "rule": "blanket-git-stage", "subject": "git add -A"' "$ROWS" \
    && has '"guard": "file-lock", "decision": "deny", "rule": "no-token"' "$ROWS" \
    && [ "$(grep -c '"allow"' "$LOG")" -eq 0 ]; then
-  ok "33 every refusal is logged with its guard, rule and subject; with sampling off, no allow is"
-else bad "33 refusals are logged" "$ROWS"; fi
+  ok "39 every refusal is logged with its guard, rule and subject; with sampling off, no allow is"
+else bad "39 refusals are logged" "$ROWS"; fi
 
 set_sampling 1
 run_in "ls -la" >/dev/null
@@ -505,8 +505,8 @@ content_payload "$P/notes/todo.txt" "hello" | GUARDRAILS_PROJECT_DIR="$P" bash "
 ROWS="$(cat "$LOG" 2>&1)"
 if has '"guard": "command-guard", "decision": "allow", "rule": null, "subject": "ls -la"' "$ROWS" \
    && has '"guard": "syntax-guard", "decision": "allow"' "$ROWS"; then
-  ok "34 one allowed call in N is logged, so a rule's refusals can be read against the traffic it sees"
-else bad "34 allowed calls are sampled" "$ROWS"; fi
+  ok "40 one allowed call in N is logged, so a rule's refusals can be read against the traffic it sees"
+else bad "40 allowed calls are sampled" "$ROWS"; fi
 
 # The log holds command text, so only its owner may read it; and a log that
 # cannot be written says so once without changing the verdict.
@@ -516,8 +516,8 @@ STDERR="$(bash_payload_cwd "git add -A" "$P" | GUARDRAILS_PROJECT_DIR="$P" GUARD
   bash "$CMD_GUARD" 2>&1 >/dev/null)"; RC=$?
 WARNINGS="$(printf '%s\n' "$STDERR" | grep -c 'decision log')"
 if [ "$MODE" = "0o600" ] && [ "$RC" -eq 2 ] && [ "$WARNINGS" -eq 1 ]; then
-  ok "46 the decision log is private to its owner, and a failed write warns once without changing the verdict"
-else bad "46 decision log mode and write failure" "mode $MODE, exit $RC, $WARNINGS warning(s): $STDERR"; fi
+  ok "41 the decision log is private to its owner, and a failed write warns once without changing the verdict"
+else bad "41 decision log mode and write failure" "mode $MODE, exit $RC, $WARNINGS warning(s): $STDERR"; fi
 rm -r "$P"
 
 # ---------------------------------------------------------------- liveness harness
@@ -539,8 +539,8 @@ json.dump(config, open(path, "w"), indent=2)
 PY
 OUT="$(bash "$K/tools/liveness.sh" 2>&1)"; RC=$?
 if [ "$RC" -ne 0 ] && has "no red test" "$OUT"; then
-  ok "13 liveness goes red when a guard loses its red case"
-else bad "13 liveness goes red when a guard loses its red case" "exit $RC: $OUT"; fi
+  ok "42 liveness goes red when a guard loses its red case"
+else bad "42 liveness goes red when a guard loses its red case" "exit $RC: $OUT"; fi
 rm -r "$K"
 
 K="$(kit_copy)"
@@ -554,8 +554,8 @@ json.dump(config, open(path, "w"), indent=2)
 PY
 OUT="$(bash "$K/tools/liveness.sh" 2>&1)"; RC=$?
 if [ "$RC" -ne 0 ] && has "proves nothing" "$OUT"; then
-  ok "14 liveness goes red when a red case passes without the guard"
-else bad "14 liveness goes red when a red case passes without the guard" "exit $RC: $OUT"; fi
+  ok "43 liveness goes red when a red case passes without the guard"
+else bad "43 liveness goes red when a red case passes without the guard" "exit $RC: $OUT"; fi
 rm -r "$K"
 
 # ---------------------------------------------------------------- broken config
@@ -568,8 +568,8 @@ STDOUT="$(bash_payload "rm -rf ./build" | GUARDRAILS_PROJECT_DIR="$P" bash "$CMD
 STDERR="$(bash_payload "rm -rf ./build" | GUARDRAILS_PROJECT_DIR="$P" bash "$CMD_GUARD" 2>&1 >/dev/null)"
 if [ "$RC" -eq 0 ] && [ -z "$STDOUT" ] && has "warning" "$STDERR" \
    && has "$P/guardrails.json" "$STDERR" && has "Expecting" "$STDERR"; then
-  ok "15 a malformed config fails open, warning on stderr only, with its path and the parse error"
-else bad "15 a malformed config warns on stderr and prints nothing on stdout" \
+  ok "44 a malformed config fails open, warning on stderr only, with its path and the parse error"
+else bad "44 a malformed config warns on stderr and prints nothing on stdout" \
      "exit $RC; stdout: $STDOUT; stderr: $STDERR"; fi
 rm -r "$P"
 
@@ -578,8 +578,8 @@ rm "$P/guardrails.json"
 STDERR="$(bash_payload "rm -rf ./build" | GUARDRAILS_PROJECT_DIR="$P" bash "$CMD_GUARD" 2>&1 >/dev/null)"; RC=$?
 NAMED="$(printf '%s' "$STDERR" | grep -oF "$P/guardrails.json" | wc -l | tr -d ' ')"
 if [ "$RC" -eq 0 ] && has "warning" "$STDERR" && [ "$NAMED" -eq 1 ]; then
-  ok "20 a config that is not there warns once, naming the file once"
-else bad "20 a missing config warns once, naming the file once" \
+  ok "45 a config that is not there warns once, naming the file once"
+else bad "45 a missing config warns once, naming the file once" \
      "exit $RC; named $NAMED time(s): $STDERR"; fi
 rm -r "$P"
 
@@ -587,13 +587,13 @@ rm -r "$P"
 
 OUT="$(bash ./demo-transcript.sh replay 2>&1)"; RC=$?
 if [ "$RC" -eq 0 ]; then
-  ok "16 every command in demo/transcript.json replays to the recorded output and exit code"
-else bad "16 the demo transcript replays exactly" "$OUT"; fi
+  ok "46 every command in demo/transcript.json replays to the recorded output and exit code"
+else bad "46 the demo transcript replays exactly" "$OUT"; fi
 
 OUT="$(bash ./demo-transcript.sh picture 2>&1)"; RC=$?
 if [ "$RC" -eq 0 ]; then
-  ok "17 every row of demo/terminal.svg comes from the transcript"
-else bad "17 the demo picture comes from the transcript" "$OUT"; fi
+  ok "47 every row of demo/terminal.svg comes from the transcript"
+else bad "47 the demo picture comes from the transcript" "$OUT"; fi
 
 # ---------------------------------------------------------------- the invoked name
 
@@ -609,8 +609,8 @@ OUT2="$(cd "$ROOT" && write_payload "$SHARED" session-alpha \
 if has 'tools/lock-approve.sh "<batch label>"' "$OUT" \
    && has 'tools/claims-clear.sh --session' "$OUT2" \
    && has 'tools/claims-takeover.sh' "$OUT2"; then
-  ok "18 run from a clone, a refusal names the wrapper script the reader ran"
-else bad "18 a refusal names the wrapper script in a clone" "$OUT$OUT2"; fi
+  ok "48 run from a clone, a refusal names the wrapper script the reader ran"
+else bad "48 a refusal names the wrapper script in a clone" "$OUT$OUT2"; fi
 rm -r "$P"
 
 # The console script imports the module and calls main, with no wrapper to say
@@ -626,8 +626,18 @@ OUT2="$(GUARDRAILS_PROJECT_DIR="$P" "$LAUNCHER" lock-approve 2>&1)"
 if has 'claude-code-guardrails lock-approve "<batch label>"' "$OUT" \
    && has "usage: claude-code-guardrails lock-approve" "$OUT2" \
    && ! has ".sh" "$OUT$OUT2"; then
-  ok "19 run as the installed command, a refusal names that command, never a .sh file"
-else bad "19 the installed command names itself in hints and usage" "$OUT$OUT2"; fi
+  ok "49 run as the installed command, a refusal names that command, never a .sh file"
+else bad "49 the installed command names itself in hints and usage" "$OUT$OUT2"; fi
+
+# A usage or configuration error exits 2, findings exit 1, and --version names
+# the command and its version.
+GUARDRAILS_PROJECT_DIR="$P" "$LAUNCHER" lock-approve >/dev/null 2>&1; USAGE_RC=$?
+"$LAUNCHER" no-such-job >/dev/null 2>&1; UNKNOWN_RC=$?
+VERSION="$("$LAUNCHER" --version)"
+WANT="claude-code-guardrails $(PYTHONPATH="$ROOT/tools" python3 -c 'import claude_code_guardrails as g; print(g.__version__)')"
+if [ "$USAGE_RC" -eq 2 ] && [ "$UNKNOWN_RC" -eq 2 ] && [ "$VERSION" = "$WANT" ]; then
+  ok "50 a usage error exits 2, and --version prints the command and its version"
+else bad "50 usage exit codes and --version" "usage $USAGE_RC, unknown job $UNKNOWN_RC, version '$VERSION'"; fi
 rm -r "$P"
 
 printf '\n%d passed, %d failed\n' "$PASSED" "$FAILED"

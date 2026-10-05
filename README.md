@@ -41,8 +41,10 @@ and runs liveness against that kit, wherever you call it from.
 To put the kit in a project without installing anything, copy `tools/`,
 `guardrails.json` and `demo/.claude/settings.json` into your project root, then
 edit `guardrails.json`: the rules, the protected paths and the allowlist are all
-yours. The walkthrough below runs
-every guard against the fictional workspace in `demo/`, no install needed.
+yours. Add `.guardrails/` to your project's `.gitignore`: the guards keep their
+state and decision log there, and this kit's own ignore file does not travel
+with the copy. The walkthrough below runs every guard against the fictional
+workspace in `demo/`, no install needed.
 
 ## The guards
 
@@ -156,7 +158,7 @@ than it protects: narrow its pattern, allowlist the exact commands, or delete
 it. In the setup these guards came from, two rules were retired that way after
 259 and 466 refusals in six days, none of them a real catch. The log holds the
 commands as typed, so it is created readable by its owner only (mode 600) and
-stays in the git-ignored `.guardrails/` folder. A row that cannot be written
+belongs in a git-ignored `.guardrails/` folder (see the install note). A row that cannot be written
 costs one warning line on stderr and never changes the verdict.
 
 ## Wiring it into Claude Code
@@ -196,7 +198,8 @@ is the source of truth):
 
 Guards deny by exiting 2 with the reason on stderr: the PreToolUse contract
 that cancels the tool call and hands the text back to the agent. Everything they
-do not block exits 0 and is never seen again.
+do not block exits 0 and is never seen again. The command-line jobs exit 2 on a
+usage or configuration error, with one line on stderr naming what failed.
 
 ## Secret scan before a push
 
@@ -321,7 +324,7 @@ context, and the failure is silent. You find out from the diff. A hook is
 different in kind. It runs on every call, it has no memory of what it was asked
 to overlook, and when it fires you get a refusal you can read. The tradeoff is
 that a deny-list is never complete, which is exactly why the liveness harness
-matters more than the rules: the value is not that these particular seven shapes
+matters more than the rules: the value is not that these particular eight shapes
 are blocked, it is that you can still prove, months later, that they are.
 
 ## What the guards enforce
@@ -380,5 +383,6 @@ are blocked, it is that you can still prove, months later, that they are.
 - `tests/demo-transcript.sh`: replays `demo/transcript.json` and checks the image against it.
 
 State lives in `.guardrails/` inside the project: the approval token, the claims
-registry, the takeover ledger, the approval log and the decision log. It is
-git-ignored: these are local facts about one machine's live sessions.
+registry, the takeover ledger, the approval log and the decision log. Keep it
+out of git (this repository ignores it; a project you copy the kit into needs
+its own `.gitignore` line): these are local facts about one machine's sessions.

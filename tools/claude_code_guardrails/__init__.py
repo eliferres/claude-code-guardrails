@@ -15,7 +15,8 @@ hook wiring in `.claude/settings.json` reads as one script per job:
 
 Guards deny by exiting 2 with the reason on stderr — the PreToolUse contract that
 blocks the tool call and hands the text back to the agent. secret-scan refuses a
-push by exiting 1, as git expects of a pre-push hook. Everything else exits 0.
+push by exiting 1, as git expects of a pre-push hook. A usage or configuration
+error exits 2. Everything else exits 0.
 
 Zero dependencies: Python 3.9+ standard library only.
 """

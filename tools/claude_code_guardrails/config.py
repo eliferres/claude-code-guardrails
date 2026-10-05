@@ -102,8 +102,9 @@ def cli_config(section: str) -> Dict[str, Any]:
 
 
 def die(message: str) -> NoReturn:
+    """A usage or configuration error: one line on stderr, exit 2."""
     sys.stderr.write("%s: %s\n" % (PROG, message))
-    sys.exit(1)
+    sys.exit(2)
 
 
 def target_path(payload: Dict[str, Any]) -> str:

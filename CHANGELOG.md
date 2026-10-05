@@ -15,6 +15,7 @@ Versions match the git tags.
 - Added `pyproject.toml`, so `pipx install git+https://github.com/eliferres/claude-code-guardrails` installs a `claude-code-guardrails` command with `--version` and the seven existing jobs as subcommands.
 
 ### Changed
+- Changed usage and configuration errors from `lock-approve`, `claims-clear`, `claims-takeover` and an unknown job to exit 2 instead of 1, so 1 always means findings.
 - Listed the command guard's rules in a README table: each rule's id, what it refuses and why.
 - Added license, Python and dependency badges beside the CI badge.
 - Gave liveness and the file list their own README sections, put install first, and renamed the wiring section, so the reading order is install, guards, liveness, wiring, walkthrough.
