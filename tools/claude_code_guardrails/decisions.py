@@ -6,7 +6,7 @@ import sys
 import time
 from typing import Any, Dict, NoReturn, Optional
 
-from .config import DENY, config_path, state_dir
+from .config import DENY, PROG, config_path, state_dir
 
 
 # The guard running and the payload it read, for the decision log.
@@ -33,18 +33,22 @@ def hook_input() -> Dict[str, Any]:
 
 
 def log_decision(decision: str, rule: Optional[str]) -> None:
-    """One row in .guardrails/decisions.jsonl. Logging never changes a verdict, so
-    any error writing the row is ignored."""
+    """One row in .guardrails/decisions.jsonl. The rows hold command text, so the
+    file is readable by its owner only. Logging never changes a verdict: a row that
+    cannot be written costs one warning line on stderr."""
     try:
         tool_input = RUN["payload"].get("tool_input") or {}
         subject = (tool_input.get("command") or tool_input.get("file_path")
                    or tool_input.get("notebook_path") or "")
         row = {"ts": int(time.time()), "guard": RUN["guard"], "decision": decision,
                "rule": rule, "subject": " ".join(str(subject).split())[:300]}
-        with open(os.path.join(state_dir(), "decisions.jsonl"), "a") as log:
+        handle = os.open(os.path.join(state_dir(), "decisions.jsonl"),
+                         os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+        with os.fdopen(handle, "a") as log:
+            os.fchmod(handle, 0o600)  # also tightens a log made before this rule
             log.write(json.dumps(row) + "\n")
-    except Exception:
-        pass
+    except Exception as error:
+        sys.stderr.write("%s: warning: decision log not written: %s\n" % (PROG, error))
 
 
 def sample_allow_every() -> int:

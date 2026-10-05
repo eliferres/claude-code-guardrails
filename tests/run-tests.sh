@@ -446,6 +446,17 @@ if has '"guard": "command-guard", "decision": "allow", "rule": null, "subject": 
    && has '"guard": "syntax-guard", "decision": "allow"' "$ROWS"; then
   ok "34 one allowed call in N is logged, so a rule's refusals can be read against the traffic it sees"
 else bad "34 allowed calls are sampled" "$ROWS"; fi
+
+# The log holds command text, so only its owner may read it; and a log that
+# cannot be written says so once without changing the verdict.
+MODE="$(python3 -c 'import os, sys; print(oct(os.stat(sys.argv[1]).st_mode & 0o777))' "$LOG")"
+printf 'not a folder\n' > "$P/state-file"
+STDERR="$(bash_payload_cwd "git add -A" "$P" | GUARDRAILS_PROJECT_DIR="$P" GUARDRAILS_STATE_DIR="$P/state-file" \
+  bash "$CMD_GUARD" 2>&1 >/dev/null)"; RC=$?
+WARNINGS="$(printf '%s\n' "$STDERR" | grep -c 'decision log')"
+if [ "$MODE" = "0o600" ] && [ "$RC" -eq 2 ] && [ "$WARNINGS" -eq 1 ]; then
+  ok "46 the decision log is private to its owner, and a failed write warns once without changing the verdict"
+else bad "46 decision log mode and write failure" "mode $MODE, exit $RC, $WARNINGS warning(s): $STDERR"; fi
 rm -r "$P"
 
 # ---------------------------------------------------------------- liveness harness

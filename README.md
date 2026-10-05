@@ -154,7 +154,9 @@ A rule that fires often and whose refusals are all safe commands is costing more
 than it protects: narrow its pattern, allowlist the exact commands, or delete
 it. In the setup these guards came from, two rules were retired that way after
 259 and 466 refusals in six days, none of them a real catch. The log holds the
-commands as typed, so it stays in the git-ignored `.guardrails/` folder.
+commands as typed, so it is created readable by its owner only (mode 600) and
+stays in the git-ignored `.guardrails/` folder. A row that cannot be written
+costs one warning line on stderr and never changes the verdict.
 
 ## Wiring it into Claude Code
 
