@@ -334,6 +334,9 @@ def nested_script(name: str, args: List[str]) -> Optional[str]:
 
 def render_command(words: List[str], depth: int) -> str:
     name, args = words[0], words[1:]
+    if name in ("rm", "git"):
+        # The shell expands a brace list before either reads it: rm -{r,f} is rm -r -f.
+        args = [word for arg in args for word in brace_expansions(arg)]
     if name == "rm":
         args = canonical_rm_args(args)
     elif name == "git":

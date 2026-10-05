@@ -711,6 +711,12 @@ every_exit 2 "61 a shortened long option is read as the option it names" \
 every_exit 0 "62 a shortened option that is not a force-delete passes" \
   "rm --rec ~/proj/build" \
   "rm --v -f ~/proj/notes.txt"
+
+# A brace list in an argument is expanded before rm or git reads it.
+every_exit 2 "63 a brace list in rm or git push arguments is read expanded" \
+  "rm -{r,f} ~/proj" \
+  "git push -{f,u} origin main" \
+  "git push origin {+main,}"
 rm -r "$P"
 
 # Claude Code reads any exit but 2 as allow, so a guard that crashes would
