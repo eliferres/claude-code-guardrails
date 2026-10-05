@@ -34,6 +34,7 @@ Versions match the git tags.
 - Fixed `pushd <folder>` losing the folder: it is now followed like `cd`, and `popd` returns to the folder before the matching `pushd`, so `pushd tools; echo x > a.sh` is read as a write into `tools/a.sh`. A `pushd` or `popd` with no folder, `+N`, `-N` or `-n` still leaves the folder unknown.
 - Fixed heredoc delimiters that are not plain identifiers (`<<"E"OF`, `<<END-1`, `<<E\OF`, `<<EOF.txt`) never ending, which hid every command after the real end line: the delimiter is now the whole word with quotes removed, and the body ends only at a line exactly equal to it, as in bash.
 - Fixed brace lists passing unread in write targets (`tee {guardrails.json,}`, `echo x > {guardrails.json,}`), in `rm` and `git` arguments (`-{r,f}`, `{+main,}`) and in the command word (`{rm,-rf,~/proj}`): all are now brace-expanded before they are checked.
+- Fixed a command the guard could not parse being checked against its raw text only, so `rm -r ~/x -f` after a brace list too long to read, or after a `$'...'` word that threw off the heredoc reading, passed: when the careful reading fails, a command any rule names anywhere in the raw text is refused.
 - Fixed a guard that crashed exiting 1, which Claude Code reads as allow: any error inside a guard now refuses the call with one line on stderr.
 - Fixed shortened rm long options (`--rec -f`, `--recursiv --forc`) passing the recursive-delete rule: an unambiguous prefix now reads as the option it names, as GNU rm reads it.
 

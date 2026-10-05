@@ -751,6 +751,16 @@ every_exit 0 "67 a harmless command spelled as a brace list passes" \
   "{echo,hi}"
 rm -r "$P"
 
+# When the careful reading fails, the raw text is all the guard has; a command
+# a rule covers anywhere in it keeps the refusal rather than passing unread.
+P="$(make_project)"
+BIG="{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}"
+every_exit 2 "70 a command the guard cannot read is refused when it names a ruled command" \
+  "$BIG; rm -r ~/x -f" \
+  "$BIG; git push origin +main" \
+  "$(lines "echo \$'it\\'s' && cat <<EOF" "don't" 'EOF' 'rm -r ~/x -f')"
+rm -r "$P"
+
 # Claude Code reads any exit but 2 as allow, so a guard that crashes would
 # wave the call through. A rule whose pattern is not a regex crashes the guard.
 P="$(make_project)"
