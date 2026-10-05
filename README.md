@@ -62,11 +62,14 @@ expands an alias defined earlier in the same command. Only the command word is
 rewritten, so a rule's view of the arguments never changes.
 
 A rule with `"allow_in_temp": true` (the shipped recursive-delete rule has it)
-lets a recursive `rm` through when every path it names resolves strictly inside
-the system temp folders (`$TMPDIR`, `/tmp`, `/var/tmp`). Scratch work there is
-routine and safe to lose. Paths are resolved first, so `/tmp` itself, a `..`
-that climbs out, a symlink that leads out, a variable the guard cannot read, or
-one path outside temp in the list keeps the refusal.
+lets a recursive `rm` through when the command is nothing but `rm` and `cd`
+into temp, and every path resolves strictly inside the system temp folders
+(`$TMPDIR`, `/tmp`, `/var/tmp`). Scratch work there is routine and safe to lose.
+Paths are resolved before the command runs, so any other command in the line
+(an `ln -s` or `mv` could repoint a temp path first), a bracket, a backtick or a
+heredoc keeps the refusal, as do `/tmp` itself, a `..` that climbs out, a
+symlink that leads out, a variable the guard cannot read, or a folder it lost
+track of after a brace group, branch, `eval` or `source`.
 
 | Rule | Refuses | Why |
 | --- | --- | --- |

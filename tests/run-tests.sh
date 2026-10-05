@@ -179,6 +179,14 @@ every_exit 2 "36 a cd the guard cannot follow leaves the folder unknown" \
   "cd /tmp && if true; then cd ~; fi; rm -rf zz" \
   "cd /tmp && eval cd ~ && rm -rf zz" \
   "cd /tmp && . ./elsewhere.sh && rm -rf zz"
+
+# The guard resolves paths before the command runs, so anything earlier in the
+# line can change what a temp path points at by the time rm reaches it.
+every_exit 2 "37 the temp allowance needs a line of nothing but rm and cd into temp" \
+  "ln -s ~ /tmp/gr-l; rm -rf /tmp/gr-l/" \
+  "mv ~/projects /tmp/gr-dd; rm -rf /tmp/gr-dd" \
+  "cd ~ && rm -rf /tmp/gr-x" \
+  "rm -rf /tmp/gr-x; rm ~/projects/notes.txt"
 rm -r "$P"
 
 # ---------------------------------------------------------------- protected-file lock

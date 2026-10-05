@@ -4,11 +4,10 @@ import fnmatch
 import glob
 import os
 import re
-import shlex
 import tempfile
 from typing import List, Optional
 
-from .shell import HEREDOC, commands_in_folder, operands, reassigned_names, resolve_word
+from .shell import HEREDOC, commands_in_folder, folder_after, operands, reassigned_names, resolve_word
 
 
 def matched_pattern(path: str, patterns: List[str], root: str) -> Optional[str]:
@@ -26,35 +25,40 @@ def temp_roots() -> List[str]:
     return sorted({os.path.realpath(root) for root in roots})
 
 
-def deletes_only_temp(command: str, cwd: Optional[str], pattern: str) -> bool:
-    """True when the command has at least one recursive rm, every path each one
-    names resolves strictly inside a temp folder, and nothing else in the command
-    matches the rule's pattern (`sh -c 'rm -rf ...'`, `find -exec rm -rf`). A path
-    that cannot be resolved, the temp folder itself, a `..` or a symlink that leads
-    out all count as outside; so does a glob with any match outside. A heredoc, a
-    command substitution, a subshell or a zsh glob qualifier (`w(:h:h)` drops path
-    parts) can change what gets deleted in a way this reading cannot follow, so a
-    heredoc, any bracket or a backtick keeps the refusal."""
+def deletes_only_temp(command: str, cwd: Optional[str]) -> bool:
+    """True when the command is nothing but rm commands and cds into temp, and every
+    path each rm names resolves strictly inside a temp folder. Paths are resolved
+    before the command runs, so any other command in the line (ln -s, mv, a
+    script) could change what a temp path points at by the time rm reaches it;
+    that is why one keeps the refusal. A path that cannot be resolved, the temp
+    folder itself, a `..` or a symlink that leads out all count as outside; so does
+    a glob with any match outside. A heredoc, a command substitution, a subshell or
+    a zsh glob qualifier (`w(:h:h)` drops path parts) can change what gets deleted
+    in a way this reading cannot follow, so a heredoc, any bracket or a backtick
+    keeps the refusal."""
     if HEREDOC.search(command) or re.search(r"[()`]", command):
         return False
     roots = temp_roots()
     unreadable = reassigned_names(command)
 
-    def inside(path: str) -> bool:
-        return any(path.startswith(root + os.sep) for root in roots)
+    def inside(path: Optional[str], or_root: bool = False) -> bool:
+        return bool(path) and any(path.startswith(root + os.sep) or (or_root and path == root)
+                                  for root in roots)
 
-    found, rest = False, []
+    found = False
     for name, args, _, folder in commands_in_folder(command, cwd):
-        split = args.index("--") if "--" in args else len(args)
-        options, targets = args[:split], operands(args[:split]) + args[split + 1:]
-        if name != "rm" or not any(re.match(r"^-[a-zA-Z]*[rR]|^--recursive$", arg) for arg in options):
-            rest.append(" ".join(shlex.quote(word) for word in [name] + args))
+        if name == "cd":
+            if not inside(folder_after(name, args, folder, unreadable), or_root=True):
+                return False
             continue
+        if name != "rm":
+            return False
         found = True
-        for target in targets:
+        split = args.index("--") if "--" in args else len(args)
+        for target in operands(args[:split]) + args[split + 1:]:
             path = resolve_word(target, folder, unreadable)
-            if not path or not inside(path):
+            if not inside(path):
                 return False
             if any(not inside(os.path.realpath(match)) for match in glob.glob(path)):
                 return False
-    return found and not re.search(pattern, " ; ".join(rest))
+    return found

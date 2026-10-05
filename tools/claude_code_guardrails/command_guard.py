@@ -12,9 +12,9 @@ from .shell import normalized_command
 from .shell_write import shell_write_check
 
 
-def safe_temp_delete(command: str, cwd: Optional[str], pattern: str) -> bool:
+def safe_temp_delete(command: str, cwd: Optional[str]) -> bool:
     try:
-        return deletes_only_temp(command, cwd, pattern)
+        return deletes_only_temp(command, cwd)
     except ValueError:
         return False
 
@@ -36,7 +36,7 @@ def command_guard() -> None:
     for rule in config.get("rules") or []:
         if not any(re.search(rule["pattern"], text) for text in spellings):
             continue
-        if rule.get("allow_in_temp") and safe_temp_delete(command, cwd, rule["pattern"]):
+        if rule.get("allow_in_temp") and safe_temp_delete(command, cwd):
             continue
         if any(entry.get("rule") == rule["id"] and re.fullmatch(entry.get("command", r"(?!)"), flat)
                for entry in allowlist):
