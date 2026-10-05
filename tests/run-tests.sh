@@ -733,6 +733,16 @@ every_exit 2 "65 with the shipped config, a protected relative write after a bra
   "{ true; }; echo x > guardrails.json" \
   "cd tools && if true; then echo x > a.sh; fi"
 
+# pushd names its folder, so it is followed like cd, and popd returns to the
+# folder before the matching pushd.
+every_exit 2 "68 a write after pushd lands in the folder pushd named" \
+  "pushd tools; echo x > a.sh" \
+  "pushd notes; pushd ../tools; popd; popd; echo x > tools/b.sh" \
+  "pushd notes; popd; popd; echo x > guardrails.json"
+every_exit 0 "69 a write after pushd or popd into an ordinary folder passes" \
+  "pushd notes; echo x > out.txt" \
+  "pushd tools; popd; echo x > a.sh"
+
 # The shell expands a brace list in the command word too: {rm,-rf,x} runs rm -rf x.
 every_exit 2 "66 a brace list in the command word is read expanded" \
   "{rm,-rf,~/proj}" \

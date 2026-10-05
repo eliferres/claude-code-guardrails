@@ -490,13 +490,16 @@ def commands_in_folder(command: str, cwd: Optional[str]) -> Iterator[Tuple[str, 
     """-> (name, args, [(redirect operator, its target)], folder it runs in) per
     simple command, with the command word in its normalized spelling. A `cd` into
     an existing folder moves the folder for the commands after it, until the end of
-    the subshell it ran in. Any other cd, and pushd or popd, leaves the folder
-    unknown (None), so relative paths after it stay unresolved."""
+    the subshell it ran in. `pushd <folder>` moves it the same way, and popd
+    returns to the folder before the matching pushd. Any other cd, pushd or popd
+    leaves the folder unknown (None), so relative paths after it stay unresolved."""
     unreadable = reassigned_names(command)
     words: List[str] = []
     redirects: List[Tuple[str, str]] = []
     pending = None
-    outer: List[Optional[str]] = []  # the folder outside each open subshell
+    pushed: List[Optional[str]] = []  # the folder before each pushd still open
+    # The folder, and the pushd stack, outside each open subshell.
+    outer: List[Tuple[Optional[str], List[Optional[str]]]] = []
     in_backtick = False
     for kind, text in command_tokens(command) + [("op", "\n")]:
         if kind == "redirect":
@@ -512,7 +515,15 @@ def commands_in_folder(command: str, cwd: Optional[str]) -> Iterator[Tuple[str, 
         if words or redirects:
             name, args = (words[0], words[1:]) if words else ("", [])
             yield name, args, redirects, cwd
-            cwd = folder_after(name, args, cwd, unreadable)
+            if name == "pushd" and len(args) == 1 and not re.match(r"[+-]", args[0]):
+                pushed.append(cwd)
+                cwd = folder_after("cd", args, cwd, unreadable)
+            elif name == "popd" and not args and pushed:
+                cwd = pushed.pop()
+            elif name in ("pushd", "popd"):  # no folder, +N, -N or -n: the stack is lost too
+                cwd, pushed = None, []
+            else:
+                cwd = folder_after(name, args, cwd, unreadable)
         words, redirects, pending = [], [], None
         if text in FOLDER_HIDING_WORDS:
             cwd = None
@@ -521,6 +532,6 @@ def commands_in_folder(command: str, cwd: Optional[str]) -> Iterator[Tuple[str, 
         if text == "`":
             in_backtick = not in_backtick
         if opens:
-            outer.append(cwd)
+            outer.append((cwd, list(pushed)))
         elif closes and outer:
-            cwd = outer.pop()
+            cwd, pushed = outer.pop()

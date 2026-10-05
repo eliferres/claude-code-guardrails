@@ -101,10 +101,11 @@ whose disks ignore case by default, protected names match without case, so
 
 The lock only sees the file tools, so the command guard closes the shell route
 to the same paths: it reads the command the way the shell would (quotes,
-redirects without spaces, brace lists, heredocs, a `cd` earlier in the line)
+redirects without spaces, brace lists, heredocs, a `cd`, `pushd` or `popd`
+earlier in the line)
 and refuses a write into a protected file whatever token is open, pointing back
-to the file tools. After a branch, a loop, a brace group, `pushd`, `eval` or
-`source` it no longer knows the folder, so there it checks a relative write
+to the file tools. After a branch, a loop, a brace group, a `pushd` or `popd`
+it cannot follow, `eval` or `source` it no longer knows the folder, so there it checks a relative write
 twice: in the last folder it knew, and by name, refusing one whose file name
 matches the last part of a protected pattern or, for a pattern ending in a bare
 `*` such as `tools/*`, whose path names that folder (`tools/x.py`). It reads the writes a redirect, `tee`,
