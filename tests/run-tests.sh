@@ -187,6 +187,15 @@ every_exit 2 "37 the temp allowance needs a line of nothing but rm and cd into t
   "mv ~/projects /tmp/gr-dd; rm -rf /tmp/gr-dd" \
   "cd ~ && rm -rf /tmp/gr-x" \
   "rm -rf /tmp/gr-x; rm ~/projects/notes.txt"
+
+# $'...' takes backslash escapes, so \' does not end it; and a write the guard
+# cannot parse at all is refused rather than waved through.
+every_exit 2 "38 an ANSI-C quoted word or an unparseable write cannot reach a protected file" \
+  "echo \$'it\\'s' > guardrails.json" \
+  "echo \"unclosed > guardrails.json" \
+  "printf x | tee 'guardrails.json"
+every_exit 0 "39 ANSI-C quoting elsewhere still passes" \
+  "echo \$'it\\'s' > notes/scratch.md"
 rm -r "$P"
 
 # ---------------------------------------------------------------- protected-file lock

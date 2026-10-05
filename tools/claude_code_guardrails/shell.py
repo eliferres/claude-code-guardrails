@@ -26,6 +26,37 @@ def strip_heredoc_bodies(command: str) -> str:
     return "\n".join(kept)
 
 
+ANSI_C_ESCAPES = {"n": "\n", "t": "\t", "r": "\r", "a": "\a", "b": "\b", "e": "\x1b", "E": "\x1b",
+                  "f": "\f", "v": "\v", "\\": "\\", "'": "'", '"': '"', "?": "?"}
+
+
+def ansi_c_word(command: str, start: int) -> Tuple[str, int]:
+    """The text of the $'...' word whose $ is at `start`, and the index after it.
+    Unlike '...', it takes backslash escapes, so \\' does not end it."""
+    out, i, n = [], start + 2, len(command)
+    while i < n:
+        c = command[i]
+        if c == "'":
+            return "".join(out), i + 1
+        if c == "\\" and i + 1 < n:
+            nxt = command[i + 1]
+            numeric = re.match(r"x([0-9A-Fa-f]{1,2})|([0-7]{1,3})", command[i + 1:])
+            if nxt in ANSI_C_ESCAPES:
+                out.append(ANSI_C_ESCAPES[nxt])
+                i += 2
+            elif numeric:
+                hex_digits, octal = numeric.groups()
+                out.append(chr(int(hex_digits, 16) if hex_digits else int(octal, 8)))
+                i += 1 + len(numeric.group())
+            else:
+                out.append(c + nxt)
+                i += 2
+            continue
+        out.append(c)
+        i += 1
+    raise ValueError("unclosed $' quote")
+
+
 def shell_tokens(command: str) -> List[Tuple[str, str]]:
     """Split a command into ("word" | "op" | "redirect", text) the way the shell
     would: quotes and backslashes removed from words, operators and redirects kept
@@ -73,6 +104,10 @@ def shell_tokens(command: str) -> List[Tuple[str, str]]:
                 raise ValueError("unclosed double quote")
             in_word = True
             i += 1
+        elif c == "$" and command.startswith("$'", i):
+            text, i = ansi_c_word(command, i)
+            word.append(text)
+            in_word = True
         elif c == "#" and not in_word:
             end = command.find("\n", i)
             i = n if end < 0 else end

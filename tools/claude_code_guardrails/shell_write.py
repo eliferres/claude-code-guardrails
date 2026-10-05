@@ -59,8 +59,16 @@ def shell_write_check(command: str, flat: str, cwd: Optional[str]) -> None:
         return
     try:
         paths = written_paths(command, cwd)
-    except ValueError:
-        return  # a command the shell itself would reject; the rules above still ran
+    except ValueError as error:
+        # Unparseable means unreadable, not harmless: refuse it when it could write.
+        if re.search(r">|\b(tee|sed|cp|mv)\b", command):
+            deny("BLOCKED by command-guard [shell-write-protected]: this command could write a\n"
+                 "  file and cannot be read safely (%s), so the guard cannot tell whether it\n"
+                 "  touches a protected one.\n"
+                 "  command: %s\n"
+                 "  instead: fix the quoting, or make the change with the Write or Edit tool."
+                 % (error, flat), "shell-write-protected")
+        return
     root = project_dir()
     for path in paths:
         pattern = matched_pattern(path, protected, root)
