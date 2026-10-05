@@ -640,5 +640,26 @@ if [ "$USAGE_RC" -eq 2 ] && [ "$UNKNOWN_RC" -eq 2 ] && [ "$VERSION" = "$WANT" ];
 else bad "50 usage exit codes and --version" "usage $USAGE_RC, unknown job $UNKNOWN_RC, version '$VERSION'"; fi
 rm -r "$P"
 
+# ---------------------------------------------------------------- the shell's grammar
+
+P="$(make_project)"
+
+# A reserved word opens a group, a branch or a negation; the command after it
+# runs all the same, so it is read as the command.
+every_exit 2 "51 a command after {, if, then, do, ! or another reserved word is read as the command" \
+  "{ git push origin +main; }" \
+  "if true; then git push origin +main; fi" \
+  "! git push origin +main" \
+  "{ rm -r ~/proj -f; }" \
+  "time { rm -r ~/proj -f; }" \
+  "while true; do rm -rf ~/proj; done" \
+  "if false; then :; elif true; then git push -f origin main; else true; fi"
+every_exit 2 "52 a cd inside a branch still leaves the folder unknown for the temp allowance" \
+  "cd ~ && if true; then cd /tmp; fi; rm -rf zz"
+every_exit 0 "53 a reserved word as an argument is only a word" \
+  "echo if then { rm" \
+  "if true; then git push origin feature; fi"
+rm -r "$P"
+
 printf '\n%d passed, %d failed\n' "$PASSED" "$FAILED"
 [ "$FAILED" -eq 0 ]

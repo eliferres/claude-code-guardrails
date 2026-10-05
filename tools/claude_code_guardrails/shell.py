@@ -175,13 +175,18 @@ WRAPPERS = {
     "exec": {"-a"}, "nice": {"-n"}, "env": {"-u", "-C", "-S", "-P"},
     "sudo": {"-u", "-g", "-C", "-D", "-h", "-p", "-U", "-T", "-r", "-t"},
 }
+# The shell's reserved words. In command position each one opens or closes a
+# group, a branch or a loop, or negates what follows, and the next word is the
+# command: read as the command name, `{` would hide the rm in `{ rm -r x -f; }`.
+RESERVED_WORDS = {"{", "}", "!", "if", "then", "else", "elif", "fi", "do", "done", "while", "until"}
 
 
 def normalized_tokens(tokens: List[Tuple[str, str]]) -> List[Tuple[str, str]]:
     """The tokens with every command word in one spelling: wrappers (env, command,
     sudo...) and leading VAR=value words dropped, the directory stripped (/bin/rm),
     the name lowercased (a case-insensitive filesystem runs RM as rm), and an alias
-    defined earlier in the same command replaced by its value. Arguments are left
+    defined earlier in the same command replaced by its value. A reserved word in
+    command position ({, if, do, !...) becomes a separator. Arguments are left
     exactly as written."""
     out: List[Tuple[str, str]] = []
     queue = list(tokens)
@@ -207,6 +212,10 @@ def normalized_tokens(tokens: List[Tuple[str, str]]) -> List[Tuple[str, str]]:
                 queue.pop(0)
             continue
         if ASSIGNMENT.match(text):
+            continue
+        if text in RESERVED_WORDS and wrapper in (None, "time"):  # time is a reserved word too
+            out.append(("op", text))  # a separator: the next word starts a command
+            wrapper = None
             continue
         if re.search(r"[*?[]", text):
             # The shell globs a command word too: /bin/r[m] runs /bin/rm, and any
@@ -344,10 +353,10 @@ def operands(args: List[str]) -> List[str]:
 
 # Words after which a cd may or may not have run, or run somewhere this reading
 # cannot see: a brace group or a branch hides it, eval and source run text the
-# guard never parsed. Each one leaves the folder unknown.
-FOLDER_HIDING_WORDS = {
-    "{", "}", "if", "then", "else", "elif", "fi", "do", "done", "while", "until",
-    "for", "case", "esac", "select", "function", "!", "[[", "eval", "source", ".",
+# guard never parsed. Each one leaves the folder unknown. The reserved words
+# arrive as separators, the rest as command names.
+FOLDER_HIDING_WORDS = RESERVED_WORDS | {
+    "for", "case", "esac", "select", "function", "[[", "eval", "source", ".",
     "pushd", "popd",
 }
 
@@ -392,6 +401,8 @@ def commands_in_folder(command: str, cwd: Optional[str]) -> Iterator[Tuple[str, 
             yield name, args, redirects, cwd
             cwd = folder_after(name, args, cwd, unreadable)
         words, redirects, pending = [], [], None
+        if text in FOLDER_HIDING_WORDS:
+            cwd = None
         opens = text == "(" or (text == "`" and not in_backtick)
         closes = text == ")" or (text == "`" and in_backtick)
         if text == "`":
