@@ -781,6 +781,11 @@ every_exit 2 "66 a brace list in the command word is read expanded" \
   "{git,push,origin,+main}"
 every_exit 0 "67 a harmless command spelled as a brace list passes" \
   "{echo,hi}"
+
+# A cd after || runs only when what came before it failed, so a write after it
+# may land in the folder before the cd or the one after.
+every_exit 2 "75 a cd after || may not run" \
+  "true || cd sub; echo x > guardrails.json"
 rm -r "$P"
 
 # When the careful reading fails, the raw text is all the guard has; a command

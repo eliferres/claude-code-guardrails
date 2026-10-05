@@ -107,7 +107,8 @@ route to the same paths; it does not close it. It reads the command the way the
 shell would (quotes, redirects without spaces, brace lists and ranges, heredocs,
 a `cd`, `pushd` or `popd` earlier in the line) and refuses a write into a
 protected file whatever token is open, pointing back to the file tools. In or
-after a branch, a loop or a brace group, where a `cd` may or may not have run,
+after a branch, a loop, a brace group or a `cd` after `||`, where a `cd` may or
+may not have run,
 it checks a relative write in every folder the command may be in. After a move
 it cannot read (`cd -`, a `cd` into a variable, `CDPATH`, `pushd +N`, `eval`,
 `source`, a `cd`, `pushd` or `popd` anywhere in a loop, from its `for`, `while`,
