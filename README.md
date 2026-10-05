@@ -60,11 +60,12 @@ same command parsed the way the shell would and written back in one spelling.
 That reading removes quotes and backslashes (`'rm'`, `r\m`, `$'-rf'`), splits
 on an unquoted `$IFS`, expands a glob in the command word (`/bin/r[m]`), drops
 the directory (`/bin/rm`), wrappers (`env`, `command`, `sudo`, `nohup`) and
-leading `VAR=value` words, lowercases the name (macOS finds `RM` as `rm` on its
+leading `VAR=value` words, reads past a reserved word (`{`, `if`, `do`, `!`) to
+the command after it, lowercases the name (macOS finds `RM` as `rm` on its
 default case-insensitive disk), and expands an alias defined earlier in the same
 command. Two commands also get their arguments rewritten: `rm` has its flags
-gathered into one cluster (`-r --force`, `-rv -f` and `--recursive -f` all read
-as `-fr`), and `git` loses its global options (`-c k=v`, `-C dir`), with every
+gathered into one cluster (`-r --force`, `-rv -f`, `--recursive -f` and the
+shortened `--rec -f` all read as `-fr`), and `git` loses its global options (`-c k=v`, `-C dir`), with every
 way of forcing a push (`-f`, `-fu`, a `+main` refspec) read as `--force`. The
 text handed to `sh -c`, `bash -lc` or `eval` is read the same way, three levels
 deep.
@@ -100,9 +101,16 @@ whose disks ignore case by default, protected names match without case, so
 
 The lock only sees the file tools, so the command guard closes the shell route
 to the same paths: it reads the command the way the shell would (quotes,
-redirects without spaces, a `cd` earlier in the line) and refuses a write
-into a protected file whatever token is open, pointing back to the file tools.
-A path built from a variable other than `$HOME` cannot be read and passes.
+redirects without spaces, brace lists, heredocs, a `cd` earlier in the line)
+and refuses a write into a protected file whatever token is open, pointing back
+to the file tools. After a branch, a loop, a brace group, `pushd`, `eval` or
+`source` it no longer knows the folder, so there it refuses any relative write
+whose file name matches the last part of a protected pattern (with `tools/*`
+protected, that is every relative write). It reads the writes a redirect, `tee`,
+`sed -i`, `cp` and `mv` make, and these pass: any other program that writes
+(`dd`, `install`, `rsync`, `perl -i`, a script), a path built from a command
+substitution or from a variable other than `$HOME` and `$TMPDIR` (or one of those
+the command sets itself), and a `~user` path.
 
 **Cross-session write claims.** Two agent sessions on one file means the second
 write silently eats the first. The first writer claims the file; a second
@@ -354,7 +362,8 @@ are blocked, it is that you can still prove, months later, that they are.
 - Guards fail open on a config that is missing, unreadable or malformed,
   deliberately: a config typo must not brick the harness. Each one prints one
   warning on stderr naming the config and what was wrong with it, and liveness
-  is what tells you a guard went quiet.
+  is what tells you a guard went quiet. Any other failure inside a guard
+  refuses the call, since Claude Code reads every exit but 2 as allow.
 - The command guard reads the command, not what it runs. A command held in a
   variable (`$CMD -rf x`) or built by a substitution, an alias from your shell
   profile, a git alias (`git -c alias.p=push p -f`), a script file that wraps
