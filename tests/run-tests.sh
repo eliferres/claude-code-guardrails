@@ -759,6 +759,11 @@ every_exit 2 "70 a command the guard cannot read is refused when it names a rule
   "$BIG; rm -r ~/x -f" \
   "$BIG; git push origin +main" \
   "$(lines "echo \$'it\\'s' && cat <<EOF" "don't" 'EOF' 'rm -r ~/x -f')"
+
+# Inside $(( )) and (( )) << is a shift, not a heredoc.
+every_exit 2 "71 a shift in arithmetic does not open a heredoc" \
+  "$(lines 'x=$((1<<2))' 'echo x > guardrails.json')" \
+  "$(lines '(( y = 1<<3 ))' 'echo x > guardrails.json')"
 rm -r "$P"
 
 # Claude Code reads any exit but 2 as allow, so a guard that crashes would

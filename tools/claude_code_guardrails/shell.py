@@ -55,6 +55,16 @@ def ends_heredoc(line: str, opener: Heredoc) -> bool:
     return (line.lstrip("\t") if opener.strip_tabs else line) == opener.delimiter
 
 
+def arithmetic_end(line: str, start: int) -> int:
+    """The index after the )) closing the (( at `start`, or the end of the line."""
+    depth = 0
+    for i in range(start, len(line)):
+        depth += {"(": 1, ")": -1}.get(line[i], 0)
+        if depth == 0:
+            return i + 1
+    return len(line)
+
+
 def heredoc_openers(line: str) -> List[Heredoc]:
     """The heredoc openers on one line. A << inside quotes or a comment is text: read
     as an opener, it would swallow the real commands after it as a body."""
@@ -74,6 +84,9 @@ def heredoc_openers(line: str) -> List[Heredoc]:
             quote = c
         elif c == "#" and (i == 0 or line[i - 1] in " \t;&|("):
             break
+        elif line.startswith("((", i):
+            i = arithmetic_end(line, i)  # $(( )) and (( )): a << there is a shift
+            continue
         elif i in starts:
             operator = starts[i]
             delimiter, quoted, i = heredoc_word(line, operator.end())
