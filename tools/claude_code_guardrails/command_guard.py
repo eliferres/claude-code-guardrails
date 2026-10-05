@@ -21,15 +21,19 @@ def safe_temp_delete(command: str, cwd: Optional[str]) -> bool:
 
 # The command names a rule's pattern opens with: \brm\s+..., \b(curl|wget)\b...
 RULE_COMMANDS = re.compile(r"(?:\\b)?\(?((?:[\w.-]+\|)*[\w.-]+)\)?(?:\\b|\\s)")
+# A brace list or range the shell would expand: not quoted, escaped or ${...}.
+QUOTED = re.compile(r"'[^']*'|\"(?:\\.|[^\"\\])*\"")
+BRACE_EXPRESSION = re.compile(r"(?<![\\$])\{[^{}\s]*(,|\.\.)[^{}\s]*\}")
 
 
 def names_ruled_command(rule: Dict[str, str], command: str) -> bool:
     """For a command the careful reading could not parse: does its raw text, with
     quotes and backslashes dropped, name a command the rule covers? A rule whose
-    pattern does not open with command names counts as named, so an unreadable
-    command is refused rather than passed."""
+    pattern does not open with command names counts as named, and so does a
+    brace expression the shell would expand, which can hide a name ({r,}m is
+    rm), so an unreadable command is refused rather than passed."""
     match = RULE_COMMANDS.match(rule["pattern"])
-    if not match:
+    if not match or BRACE_EXPRESSION.search(QUOTED.sub("", command)):
         return True
     names = "|".join(re.escape(name) for name in match.group(1).split("|"))
     return bool(re.search(r"(?i)\b(%s)\b" % names, re.sub(r"[\\'\"]", "", command)))

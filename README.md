@@ -71,7 +71,8 @@ loses its global options (`-c k=v`, `-C dir`), with every way of forcing a push
 (`-f`, `-fu`, a `+main` refspec) read as `--force`. The text handed to `sh -c`,
 `bash -lc` or `eval` is read the same way, three levels deep. A command that
 reading cannot parse (an unclosed quote, a brace list of more than 1024 words)
-is refused when its raw text names a command any rule covers.
+is refused when its raw text names a command any rule covers, or holds an
+unquoted brace expression that could hide one (`{r,}m`).
 
 A rule with `"allow_in_temp": true` (the shipped recursive-delete rule has it)
 lets a recursive `rm` through when the command is nothing but `rm` and `cd`

@@ -792,6 +792,11 @@ every_exit 2 "75 a cd after || may not run" \
 every_exit 2 "76 a cd in a pipeline does not move the folder" \
   "cd sub | true; echo x > guardrails.json" \
   "true | cd sub; echo x > guardrails.json"
+
+# When the reading fails, a brace expression in the raw text may hide the
+# command name ({r,}m is rm), so it keeps the refusal too.
+every_exit 2 "77 an unreadable command with a brace expression is refused" \
+  "{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}; {r,}m -r ~/x -f"
 rm -r "$P"
 
 # When the careful reading fails, the raw text is all the guard has; a command
