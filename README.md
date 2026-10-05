@@ -387,6 +387,9 @@ are blocked, it is that you can still prove, months later, that they are.
   and a command run by `timeout`, `xargs` or `find -exec`. Arguments are parsed
   for `rm` and `git` only; every other rule matches its pattern against the text
   and the normalized command.
+- A `cd` after `&&` is followed as if it ran, so when a command before it fails
+  (`false && cd sub; echo x > guardrails.json`), a later write lands in the
+  folder before the `cd` while the guard checks the folder after it.
 - Exercised with Claude Code. Any harness that can run a hook script and read an
   exit code can use these, but the payload shape is Claude Code's.
 
