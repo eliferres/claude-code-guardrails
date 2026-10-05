@@ -351,6 +351,23 @@ OUT="$(edit_payload "$P/hook.sh" "echo one" "if true; then" | GUARDRAILS_PROJECT
 if [ "$SYNTAX_OK" -eq 1 ] && [ "$RC" -eq 2 ] && has "Edit would leave" "$OUT"; then
   ok "29 a parseable write passes, and an Edit is judged by the whole file it would leave"
 elif [ "$SYNTAX_OK" -eq 1 ]; then bad "29 an Edit that breaks the file is refused" "exit $RC: $OUT"; fi
+
+# A versioned interpreter name runs the same cut-off body, and a zsh script is
+# parsed by zsh: its glob qualifiers are not bash syntax errors.
+sed 's/python3 -c/python3.11 -c/' "$P/apostrophe.sh" > "$P/versioned.sh"
+cat > "$P/zsh-ok.sh" <<'BODY'
+#!/bin/zsh
+for f in *(N); do print -r -- $f; done
+BODY
+OUT="$(write_file hook.sh "$(cat "$P/versioned.sh")")"; RC=$?
+OUT2="$(write_file hook.sh "$(cat "$P/zsh-ok.sh")")"; RC2=$?
+ZSH_RC=2
+if command -v zsh >/dev/null; then
+  OUT3="$(write_file hook.sh "$(printf '#!/bin/zsh\nif true; then\n')")"; ZSH_RC=$?
+fi
+if [ "$RC" -eq 2 ] && has "apostrophe" "$OUT" && [ "$RC2" -eq 0 ] && [ "$ZSH_RC" -eq 2 ]; then
+  ok "48 python3.X -c bodies are checked, and a zsh script is parsed by zsh"
+else bad "48 versioned python and zsh scripts" "exit $RC/$RC2/$ZSH_RC: $OUT $OUT2 ${OUT3:-}"; fi
 rm -r "$P"
 
 # ---------------------------------------------------------------- pre-push secret scan

@@ -110,8 +110,9 @@ session was holding is written to a ledger so it gets picked up rather than lost
 
 **Syntax guard.** A PreToolUse hook on writes. A shell or Python file under the
 paths in `syntax_check.paths` is rebuilt as the Write or Edit would leave it and
-parsed before it lands: `bash -n` for shell, a compile for Python, and a compile
-of the Python a shell file embeds in a `python3 -c '...'` body or a quoted
+parsed before it lands: `bash -n` for shell (`zsh -n` for a zsh shebang, when
+zsh is installed), a compile for Python, and a compile of the Python a shell
+file embeds in a `python3 -c '...'` body (any `python3.X` name) or a quoted
 heredoc. That last check exists because of one shape: an apostrophe in a comment
 inside a single-quoted `-c` body ends the shell string early. With an even quote
 count `bash -n` still passes and the Python runs cut off; it broke three hooks in

@@ -3,6 +3,7 @@
 import ast
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -15,7 +16,7 @@ from .shell import HEREDOC
 
 
 # `python3 -c '` followed by its body, with any flags (and one flag value) between.
-PYTHON_C = re.compile(r"python3?\s+(?:-[A-Za-z]+(?:\s+[^-\s'\"]\S*)?\s+)*-c\s+'")
+PYTHON_C = re.compile(r"python(?:3(?:\.[0-9]+)?)?\s+(?:-[A-Za-z]+(?:\s+[^-\s'\"]\S*)?\s+)*-c\s+'")
 
 
 def python_error(source: str) -> Optional[SyntaxError]:
@@ -98,7 +99,7 @@ def embedded_python_problem(script: str) -> Optional[str]:
                     % (line_of(match.start()), error.lineno, error.msg))
     for start, stop, opener, match in bodies:
         # Only a quoted tag fed to Python: an unquoted one is expanded by the shell first.
-        if not match.group(1) or not re.search(r"\bpython3?\b", opener) or commented_out(start - 1):
+        if not match.group(1) or not re.search(r"\bpython(?:3(?:\.[0-9]+)?)?\b", opener) or commented_out(start - 1):
             continue
         body = script[start:stop]
         if match.group().startswith("<<-"):
@@ -111,18 +112,18 @@ def embedded_python_problem(script: str) -> Optional[str]:
 
 
 def script_kind(path: str, text: str) -> Optional[str]:
-    """"sh", "py", or None for a file this guard does not parse."""
+    """"bash", "zsh", "py", or None for a file this guard does not parse. A zsh
+    shebang wins over a .sh name: zsh syntax such as glob qualifiers is not bash."""
     extension = os.path.splitext(path)[1]
+    first = text.split("\n", 1)[0] if text.startswith("#!") else ""
+    if re.search(r"\bzsh\b", first) or extension == ".zsh":
+        return "zsh"
     if extension in (".sh", ".bash"):
-        return "sh"
-    if extension == ".py":
+        return "bash"
+    if extension == ".py" or "python" in first:
         return "py"
-    first = text.split("\n", 1)[0]
-    if first.startswith("#!"):
-        if "python" in first:
-            return "py"
-        if re.search(r"\b(ba)?sh\b", first):
-            return "sh"
+    if re.search(r"\b(ba)?sh\b", first):
+        return "bash"
     return None
 
 
@@ -130,16 +131,18 @@ def syntax_problem(path: str, text: str, kind: str) -> Optional[str]:
     if kind == "py":
         error = python_error(text)
         return "python line %s: %s" % (error.lineno, error.msg) if error else None
+    if not shutil.which(kind):
+        return None  # no zsh here to ask; better silent than parsed as the wrong shell
     handle, scratch = tempfile.mkstemp(suffix=".sh")
     try:
         with os.fdopen(handle, "w") as out:
             out.write(text)
-        result = subprocess.run(["bash", "-n", scratch], capture_output=True, text=True, timeout=10)
+        result = subprocess.run([kind, "-n", scratch], capture_output=True, text=True, timeout=10)
     finally:
         os.remove(scratch)
     if result.returncode != 0:
         lines = result.stderr.replace(scratch, path).strip().splitlines()
-        return "bash -n: " + " ".join(lines[-3:])
+        return "%s -n: %s" % (kind, " ".join(lines[-3:]))
     return embedded_python_problem(text)
 
 
