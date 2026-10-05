@@ -765,9 +765,15 @@ every_exit 0 "73 ordinary writes in and after groups, branches and loops pass" \
   "rm -rf /tmp/build-xyz"
 # A loop body runs any number of times, so a cd in it can land anywhere.
 mkdir -p "$P/sub/deep"
-every_exit 2 "74 a cd inside a loop loses the folder" \
+every_exit 2 "74 a cd inside a loop or a function loses the folder" \
   "cd sub/deep; while :; do cd ..; done; echo x > guardrails.json" \
-  "cd sub/deep; for d in a b; do cd ..; done; echo x > guardrails.json"
+  "cd sub/deep; for d in a b; do cd ..; done; echo x > guardrails.json" \
+  "cd sub/deep; for d in a b; { cd ..; }; echo x > guardrails.json" \
+  "cd sub/deep; for ((i=0;i<2;i++)) { cd ..; }; echo x > guardrails.json" \
+  "cd sub/deep; f(){ cd ..; }; f; f; echo x > guardrails.json" \
+  "cd sub/deep; function f { cd ..; }; f; f; echo x > guardrails.json" \
+  "cd sub/deep; while [ ! -f guardrails.json ] && cd ..; do :; done; echo x > guardrails.json" \
+  "cd sub/deep; f(){ cd ..; [ -f guardrails.json ] || f; }; f; echo x > guardrails.json"
 
 # The shell expands a brace list in the command word too: {rm,-rf,x} runs rm -rf x.
 every_exit 2 "66 a brace list in the command word is read expanded" \

@@ -558,20 +558,29 @@ def commands_in_folder(command: str, cwd: Optional[str]) -> Iterator[
     pushd. After a group or branch, where a cd may or may not have run, the folder
     is unknown (None) but the folders it may be are still listed; after a move the
     guard cannot read (cd -, a variable, CDPATH, pushd +N, eval, source, any move
-    inside a loop) that list is empty too."""
+    inside a loop) that list is empty too. A move inside a function definition may
+    run whenever the function is called, so it leaves the folder unknown for the
+    rest of the command."""
     unreadable = reassigned_names(command)
     words: List[str] = []
     redirects: List[Tuple[str, str]] = []
     pending = None
     places: Set[str] = {cwd} if cwd else set()
     branched = False  # past a group or branch: a later move may not have run
-    loops = 0  # open loop bodies: a move there may run any number of times
+    # Each open loop and function definition, named by what closes it. A loop runs
+    # from its for/while/until/select through its condition ("loop" until its body
+    # opens) to the "done" or "loop}" closing its body; a function from its name
+    # ("function" until its body opens) to the "function}" closing it; "}" is a
+    # group nested in either. A move inside a loop may run any number of times.
+    frames: List[str] = []
+    moved_in_function = False  # the folder is unknown from here on
     # The folder, and where it may be, before each pushd still open.
     pushed: List[Tuple[Optional[str], Set[str]]] = []
     # The folder, where it may be, and the pushd stack, outside each open subshell.
     outer: List[Tuple[Optional[str], Set[str], List[Tuple[Optional[str], Set[str]]]]] = []
     in_backtick = False
-    for kind, text in command_tokens(command) + [("op", "\n")]:
+    tokens = command_tokens(command) + [("op", "\n")]
+    for index, (kind, text) in enumerate(tokens):
         if kind == "redirect":
             pending = text
             continue
@@ -582,11 +591,25 @@ def commands_in_folder(command: str, cwd: Optional[str]) -> Iterator[
             else:
                 words.append(text)
             continue
+        if text == "(" and len(words) == 1 and tokens[index + 1:index + 2] == [("op", ")")]:
+            frames.append("function")  # name() opens a function definition
         if words or redirects:
             name, args = (words[0], words[1:]) if words else ("", [])
+            if moved_in_function:
+                cwd, places = None, set()
             yield name, args, redirects, cwd, frozenset(places)
-            if loops and name in ("cd", "pushd", "popd"):
-                cwd, places, pushed = None, set(), []  # repeated, it can land anywhere
+            if name == "function":
+                # `function f { cd ..; }` reads as one command: past the {, its
+                # arguments are the first words of the body.
+                body = args[args.index("{") + 1:] if "{" in args else []
+                frames.append("function}" if body else "function")
+                moved_in_function = moved_in_function or any(arg in ("cd", "pushd", "popd") for arg in body)
+            if name in ("for", "select"):
+                frames.append("loop")
+            in_function = any(frame.startswith("function") for frame in frames)
+            if frames and name in ("cd", "pushd", "popd"):
+                cwd, places, pushed = None, set(), []  # it may run again, or at any call
+                moved_in_function = moved_in_function or in_function
             elif name in ("cd", "pushd") and (name == "cd" or len(args) == 1 and not re.match(r"[+-]", args[0])):
                 if name == "pushd":
                     pushed.append((cwd, set(places)))
@@ -604,7 +627,16 @@ def commands_in_folder(command: str, cwd: Optional[str]) -> Iterator[
         words, redirects, pending = [], [], None
         if text in FOLDER_HIDING_WORDS:
             cwd, branched = None, True
-        loops += {"do": 1, "done": -1 if loops else 0}.get(text, 0)
+        if text in ("while", "until"):
+            frames.append("loop")
+        elif text in ("do", "{") and frames:
+            if frames[-1] in ("loop", "function"):
+                frames[-1] = "done" if text == "do" else frames[-1] + "}"
+            else:
+                frames.append("done" if text == "do" else "}")
+        elif frames and (text == "done" and frames[-1] == "done"
+                         or text == "}" and frames[-1] in ("}", "loop}", "function}")):
+            frames.pop()
         opens = text == "(" or (text == "`" and not in_backtick)
         closes = text == ")" or (text == "`" and in_backtick)
         if text == "`":

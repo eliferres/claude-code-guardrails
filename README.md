@@ -110,8 +110,11 @@ protected file whatever token is open, pointing back to the file tools. In or
 after a branch, a loop or a brace group, where a `cd` may or may not have run,
 it checks a relative write in every folder the command may be in. After a move
 it cannot read (`cd -`, a `cd` into a variable, `CDPATH`, `pushd +N`, `eval`,
-`source`, any `cd` inside a loop) it refuses a relative write whose file name matches the last part of a
-protected pattern, a bare `*` (`tools/*`) matching any name. It reads the writes
+`source`, a `cd`, `pushd` or `popd` anywhere in a loop, from its `for`, `while`,
+`until` or `select` to the end of its body, or one inside a function
+definition, which leaves the folder unknown for the rest of the command) it
+refuses a relative write whose file name matches the last part of a protected
+pattern, a bare `*` (`tools/*`) matching any name. It reads the writes
 a redirect, `tee`, `sed -i`, `cp` and `mv` make, and these pass: any other
 program that writes (`dd`, `install`, `rsync`, `perl -i`, a script), a path
 built from a command substitution or from a variable other than `$HOME` and
