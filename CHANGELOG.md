@@ -2,7 +2,7 @@
 
 Versions match the git tags.
 
-## Unreleased
+## [1.2.0](https://github.com/eliferres/claude-code-guardrails/releases/tag/v1.2.0) - 2026-10-04
 
 ### Added
 - Added shell-write protection: the command guard refuses a redirect, `tee`, `sed -i`, `cp` or `mv` into a file the protected-file lock covers, a route that walked past the lock because it only checks the Write and Edit tools.

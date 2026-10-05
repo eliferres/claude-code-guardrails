@@ -21,7 +21,7 @@ error exits 2. Everything else exits 0.
 Zero dependencies: Python 3.9+ standard library only.
 """
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 from .cli import main
 
