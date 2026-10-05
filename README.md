@@ -92,7 +92,9 @@ track of after a brace group, branch, `eval` or `source`.
 high-stakes (settings, hook scripts, the rules the agent reads every session)
 are refused unless an approval token names them. The token covers one batch,
 expires, and is minted by a separate command a human runs after seeing the
-change. A live token from other work is not a yes for this one.
+change. A live token from other work is not a yes for this one. On macOS,
+whose disks ignore case by default, protected names match without case, so
+`GUARDRAILS.JSON` is still `guardrails.json`.
 
 The lock only sees the file tools, so the command guard closes the shell route
 to the same paths: it reads the command the way the shell would (quotes,

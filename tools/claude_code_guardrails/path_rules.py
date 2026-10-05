@@ -4,10 +4,23 @@ import fnmatch
 import glob
 import os
 import re
+import sys
 import tempfile
 from typing import List, Optional
 
 from .shell import HEREDOC, commands_in_folder, folder_after, operands, reassigned_names, resolve_word
+
+
+# macOS disks are case-insensitive by default, so GUARDRAILS.JSON and
+# guardrails.json name one file there. Folding case on every Mac also covers the
+# rare case-sensitive volume, where it can only refuse more, never less.
+FOLD_CASE = sys.platform == "darwin"
+
+
+def path_matches(name: str, pattern: str) -> bool:
+    if FOLD_CASE:
+        return fnmatch.fnmatchcase(name.lower(), pattern.lower())
+    return fnmatch.fnmatchcase(name, pattern)
 
 
 def matched_pattern(path: str, patterns: List[str], root: str) -> Optional[str]:
@@ -15,7 +28,7 @@ def matched_pattern(path: str, patterns: List[str], root: str) -> Optional[str]:
     relative = os.path.relpath(path, root)
     for pattern in patterns:
         absolute = pattern if os.path.isabs(pattern) else os.path.join(root, pattern)
-        if fnmatch.fnmatch(path, os.path.expanduser(absolute)) or fnmatch.fnmatch(relative, pattern):
+        if path_matches(path, os.path.expanduser(absolute)) or path_matches(relative, pattern):
             return pattern
     return None
 

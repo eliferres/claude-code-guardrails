@@ -21,6 +21,7 @@ Versions match the git tags.
 - Renamed `tools/guardrails.py` to `tools/claude_code_guardrails.py`, so an install cannot shadow the `guardrails` package from guardrails-ai.
 
 ### Fixed
+- Fixed the protected-file lock missing a protected file written in other letter case on macOS (`GUARDRAILS.JSON` for `guardrails.json`); on a Mac protected names now match without case.
 - Fixed every hint and usage line naming a `tools/*.sh` script, which an installed user's project does not have: run from a clone they still name the script you ran, and run as the installed command they say `claude-code-guardrails lock-approve` and so on.
 - Fixed guards going quiet on a `guardrails.json` that is missing, unreadable or malformed: they still let the call through, but now print one warning naming the config once and saying what was wrong with it.
 - Re-rendered the demo image at a smaller type size, so the same session fits without rows running to the edge.

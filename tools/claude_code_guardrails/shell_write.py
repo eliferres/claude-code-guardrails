@@ -1,6 +1,5 @@
 """Which files a shell command writes, and the check that keeps it off protected ones."""
 
-import fnmatch
 import glob
 import os
 import re
@@ -8,7 +7,7 @@ from typing import FrozenSet, List, Optional
 
 from .config import config_path, guard_config, project_dir
 from .decisions import deny
-from .path_rules import matched_pattern
+from .path_rules import matched_pattern, path_matches
 from .shell import commands_in_folder, operands, reassigned_names, resolve_word
 
 
@@ -66,7 +65,7 @@ def protected_match(path: str, protected: List[str], root: str) -> Optional[str]
             return pattern
     for pattern in protected:
         literal = os.path.expanduser(pattern if os.path.isabs(pattern) else os.path.join(root, pattern))
-        if not re.search(r"[*?[]", literal) and fnmatch.fnmatch(literal, path):
+        if not re.search(r"[*?[]", literal) and path_matches(literal, path):
             return pattern
     return None
 

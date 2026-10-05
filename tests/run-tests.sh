@@ -231,6 +231,15 @@ every_exit 0 "44 the narrower forms stay allowed" \
   "git push origin +feature" \
   "rm -r ~/projects/build" \
   "sh -c 'ls -la'"
+
+# macOS disks are case-insensitive by default, so GUARDRAILS.JSON there is the
+# protected guardrails.json; on Linux it is a different, unprotected file.
+if [ "$(uname)" = Darwin ]; then CASE_WANT=2; else CASE_WANT=0; fi
+OUT="$(write_payload "$P/GUARDRAILS.JSON" | GUARDRAILS_PROJECT_DIR="$P" bash "$LOCK_GUARD" 2>&1)"; RC=$?
+OUT2="$(run_in "echo x > Rules/Team-Rules.MD")"; RC2=$?
+if [ "$RC" -eq "$CASE_WANT" ] && [ "$RC2" -eq "$CASE_WANT" ]; then
+  ok "45 protected names compare case-insensitively on macOS and exactly elsewhere"
+else bad "45 case-insensitive protected names" "want $CASE_WANT, lock exit $RC, shell exit $RC2: $OUT $OUT2"; fi
 rm -r "$P"
 
 # ---------------------------------------------------------------- protected-file lock
