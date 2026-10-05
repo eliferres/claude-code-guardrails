@@ -287,13 +287,26 @@ def command_tokens(command: str) -> List[Tuple[str, str]]:
 
 RM_LONG_FLAGS = {"--recursive": "r", "--force": "f", "--dir": "d", "--verbose": "v",
                  "--interactive": "i"}
+# Every long option GNU rm has: it takes any prefix that names exactly one of them.
+RM_LONG_OPTIONS = sorted(RM_LONG_FLAGS) + ["--help", "--no-preserve-root", "--one-file-system",
+                                           "--preserve-root", "--version"]
+
+
+def rm_long_flag(arg: str) -> str:
+    """The short letter for an rm long option, written in full or as any
+    unambiguous prefix (--rec is --recursive; --v is --verbose or --version)."""
+    name = arg.split("=", 1)[0]
+    if name in RM_LONG_FLAGS:
+        return RM_LONG_FLAGS[name]
+    named = [option for option in RM_LONG_OPTIONS if option.startswith(name)]
+    return RM_LONG_FLAGS.get(named[0], "") if len(named) == 1 else ""
 SHELLS = {"sh", "bash", "zsh", "dash", "ksh"}
 
 
 def canonical_rm_args(args: List[str]) -> List[str]:
     """rm's arguments with every flag gathered into one sorted cluster in front:
-    -r --force, -rv -f and --recursive -f all become -fr (-frv), wherever they
-    stood. -R is -r. Words after -- are operands, as rm reads them."""
+    -r --force, -rv -f, --recursive -f and --rec --forc all become -fr (-frv),
+    wherever they stood. -R is -r. Words after -- are operands, as rm reads them."""
     letters, rest, operands_only = set(), [], False
     for arg in args:
         if operands_only or arg == "-" or not arg.startswith("-"):
@@ -302,7 +315,7 @@ def canonical_rm_args(args: List[str]) -> List[str]:
             operands_only = True
             rest.append(arg)
         elif arg.startswith("--"):
-            letters.update(RM_LONG_FLAGS.get(arg.split("=", 1)[0], ""))
+            letters.update(rm_long_flag(arg))
         else:
             letters.update(arg[1:].replace("R", "r"))
     return (["-" + "".join(sorted(letters))] if letters else []) + rest

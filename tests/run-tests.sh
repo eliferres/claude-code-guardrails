@@ -701,6 +701,16 @@ every_exit 2 "58 a brace list that expands to a protected name is refused" \
 every_exit 0 "59 a brace list that expands to ordinary names passes" \
   "echo x > notes/{a,b}.txt" \
   "cp {guardrails.json,notes/copy.json}"
+
+# GNU rm takes any unambiguous prefix of a long option.
+every_exit 2 "61 a shortened long option is read as the option it names" \
+  "rm --rec -f ~/proj" \
+  "rm --recursiv --forc ~/proj" \
+  "rm --r --f ~/proj" \
+  "rm -r --fo ~/proj"
+every_exit 0 "62 a shortened option that is not a force-delete passes" \
+  "rm --rec ~/proj/build" \
+  "rm --v -f ~/proj/notes.txt"
 rm -r "$P"
 
 # Claude Code reads any exit but 2 as allow, so a guard that crashes would
