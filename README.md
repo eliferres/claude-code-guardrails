@@ -58,17 +58,20 @@ be allowlisted; a shape cannot.
 Each rule is matched twice: against the command as written, and against the
 same command parsed the way the shell would and written back in one spelling.
 That reading removes quotes and backslashes (`'rm'`, `r\m`, `$'-rf'`), splits
-on an unquoted `$IFS`, expands a glob in the command word (`/bin/r[m]`), drops
-the directory (`/bin/rm`), wrappers (`env`, `command`, `sudo`, `nohup`) and
-leading `VAR=value` words, reads past a reserved word (`{`, `if`, `do`, `!`) to
-the command after it, lowercases the name (macOS finds `RM` as `rm` on its
-default case-insensitive disk), and expands an alias defined earlier in the same
-command. Two commands also get their arguments rewritten: `rm` has its flags
-gathered into one cluster (`-r --force`, `-rv -f`, `--recursive -f` and the
-shortened `--rec -f` all read as `-fr`), and `git` loses its global options (`-c k=v`, `-C dir`), with every
-way of forcing a push (`-f`, `-fu`, a `+main` refspec) read as `--force`. The
-text handed to `sh -c`, `bash -lc` or `eval` is read the same way, three levels
-deep.
+on an unquoted `$IFS`, expands a glob (`/bin/r[m]`) or a brace list or range
+(`{rm,-rf,x}`, `{r..r}m`) in the command word, drops the directory (`/bin/rm`),
+wrappers (`env`, `command`, `sudo`, `nohup`) and leading `VAR=value` words,
+reads past a reserved word (`{`, `if`, `do`, `!`) to the command after it,
+lowercases the name (macOS finds `RM` as `rm` on its default case-insensitive
+disk), and expands an alias defined earlier in the same command. Two commands
+also get their arguments rewritten, after brace expansion (`-{r,f}` is `-r -f`):
+`rm` has its flags gathered into one cluster (`-r --force`, `-rv -f`,
+`--recursive -f` and the shortened `--rec -f` all read as `-fr`), and `git`
+loses its global options (`-c k=v`, `-C dir`), with every way of forcing a push
+(`-f`, `-fu`, a `+main` refspec) read as `--force`. The text handed to `sh -c`,
+`bash -lc` or `eval` is read the same way, three levels deep. A command that
+reading cannot parse (an unclosed quote, a brace list of more than 1024 words)
+is refused when its raw text names a command any rule covers.
 
 A rule with `"allow_in_temp": true` (the shipped recursive-delete rule has it)
 lets a recursive `rm` through when the command is nothing but `rm` and `cd`
@@ -99,20 +102,22 @@ change. A live token from other work is not a yes for this one. On macOS,
 whose disks ignore case by default, protected names match without case, so
 `GUARDRAILS.JSON` is still `guardrails.json`.
 
-The lock only sees the file tools, so the command guard closes the shell route
-to the same paths: it reads the command the way the shell would (quotes,
-redirects without spaces, brace lists, heredocs, a `cd`, `pushd` or `popd`
-earlier in the line)
-and refuses a write into a protected file whatever token is open, pointing back
-to the file tools. After a branch, a loop, a brace group, a `pushd` or `popd`
-it cannot follow, `eval` or `source` it no longer knows the folder, so there it checks a relative write
-twice: in the last folder it knew, and by name, refusing one whose file name
-matches the last part of a protected pattern or, for a pattern ending in a bare
-`*` such as `tools/*`, whose path names that folder (`tools/x.py`). It reads the writes a redirect, `tee`,
-`sed -i`, `cp` and `mv` make, and these pass: any other program that writes
-(`dd`, `install`, `rsync`, `perl -i`, a script), a path built from a command
-substitution or from a variable other than `$HOME` and `$TMPDIR` (or one of those
-the command sets itself), and a `~user` path.
+The lock only sees the file tools, so the command guard narrows the shell
+route to the same paths; it does not close it. It reads the command the way the
+shell would (quotes, redirects without spaces, brace lists and ranges, heredocs,
+a `cd`, `pushd` or `popd` earlier in the line) and refuses a write into a
+protected file whatever token is open, pointing back to the file tools. In or
+after a branch, a loop or a brace group, where a `cd` may or may not have run,
+it checks a relative write in every folder the command may be in. After a move
+it cannot read (`cd -`, a `cd` into a variable, `CDPATH`, `pushd +N`, `eval`,
+`source`) it refuses a relative write whose file name matches the last part of a
+protected pattern, a bare `*` (`tools/*`) matching any name. It reads the writes
+a redirect, `tee`, `sed -i`, `cp` and `mv` make, and these pass: any other
+program that writes (`dd`, `install`, `rsync`, `perl -i`, a script), a path
+built from a command substitution or from a variable other than `$HOME` and
+`$TMPDIR` (or one of those the command sets itself), a `~user` path, and a
+write after a `cd` into an unquoted substitution (`cd $(git rev-parse
+--show-toplevel)/tools`).
 
 **Cross-session write claims.** Two agent sessions on one file means the second
 write silently eats the first. The first writer claims the file; a second
@@ -370,8 +375,12 @@ are blocked, it is that you can still prove, months later, that they are.
   variable (`$CMD -rf x`) or built by a substitution, an alias from your shell
   profile, a git alias (`git -c alias.p=push p -f`), a script file that wraps
   the dangerous call, and a nested `sh -c` more than three levels deep will walk
-  past it. Arguments are parsed for `rm` and `git` only; every other rule
-  matches its pattern against the text and the normalized command.
+  past it. So will script text fed to a shell on its input (`bash <<< '...'`,
+  `echo '...' | bash`, a `bash <<EOF` heredoc), the string `env -S` splits into
+  a command, a `coproc`, the body of a function defined with `function f { ...; }`,
+  and a command run by `timeout`, `xargs` or `find -exec`. Arguments are parsed
+  for `rm` and `git` only; every other rule matches its pattern against the text
+  and the normalized command.
 - Exercised with Claude Code. Any harness that can run a hook script and read an
   exit code can use these, but the payload shape is Claude Code's.
 

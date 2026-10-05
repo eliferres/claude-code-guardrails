@@ -20,6 +20,7 @@ Versions match the git tags.
 - Added license, Python and dependency badges beside the CI badge.
 - Gave liveness and the file list their own README sections, put install first, and renamed the wiring section, so the reading order is install, guards, liveness, wiring, walkthrough.
 - Renamed `tools/guardrails.py` to `tools/claude_code_guardrails.py`, so an install cannot shadow the `guardrails` package from guardrails-ai.
+- Reworded the README's shell-write section to say the command guard narrows the shell route to protected files rather than closing it, and listed in Limitations the shapes that still pass: script text fed to a shell on its input, `env -S`, `coproc`, `function` bodies, and `timeout`, `xargs` and `find -exec`.
 
 ### Fixed
 - Fixed the protected-file lock missing a protected file written in other letter case on macOS (`GUARDRAILS.JSON` for `guardrails.json`); on a Mac protected names now match without case.
