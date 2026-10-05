@@ -8,7 +8,7 @@ from . import __version__
 from .claims import claims_clear, claims_guard, claims_takeover
 from .command_guard import command_guard
 from .config import PROG, die
-from .decisions import RUN, log_decision, sample_allow_every
+from .decisions import RUN, deny, log_decision, sample_allow_every
 from .liveness import liveness
 from .lock import file_lock, lock_approve
 from .secret_scan import secret_scan
@@ -32,13 +32,18 @@ GUARDS = ("command-guard", "file-lock", "syntax-guard", "claims-guard")
 
 
 def run_guard(job: str, argv: List[str]) -> NoReturn:
-    """Runs a guard and logs one allowed call in N. Refusals log themselves in deny()."""
+    """Runs a guard and logs one allowed call in N. Refusals log themselves in deny().
+    Claude Code reads every exit but 2 as allow, so a guard that crashes has
+    checked nothing and refuses the call."""
     RUN["guard"] = job
     try:
         COMMANDS[job](argv)
         code: Any = 0
     except SystemExit as done:
         code = done.code
+    except Exception as error:
+        deny("%s: %s hit an internal error and refused the call (%s: %s)"
+             % (PROG, job, type(error).__name__, " ".join(str(error).split())), "guard-error")
     if code in (0, None):
         every = sample_allow_every()
         if every > 0 and random.randrange(every) == 0:

@@ -703,5 +703,23 @@ every_exit 0 "59 a brace list that expands to ordinary names passes" \
   "cp {guardrails.json,notes/copy.json}"
 rm -r "$P"
 
+# Claude Code reads any exit but 2 as allow, so a guard that crashes would
+# wave the call through. A rule whose pattern is not a regex crashes the guard.
+P="$(make_project)"
+python3 - "$P/guardrails.json" <<'PY'
+import json, sys
+path = sys.argv[1]
+config = json.load(open(path))
+config["command_guard"]["rules"][0]["pattern"] = "("
+json.dump(config, open(path, "w"), indent=2)
+PY
+STDOUT="$(bash_payload "ls" | GUARDRAILS_PROJECT_DIR="$P" bash "$CMD_GUARD" 2>"$P/stderr")"; RC=$?
+STDERR="$(cat "$P/stderr")"
+if [ "$RC" -eq 2 ] && [ -z "$STDOUT" ] && has "command-guard" "$STDERR" && has "error" "$STDERR" \
+   && [ "$(printf '%s\n' "$STDERR" | wc -l | tr -d ' ')" -eq 1 ]; then
+  ok "60 a guard that crashes refuses the call, with one line on stderr"
+else bad "60 a crashing guard refuses" "exit $RC; stdout: $STDOUT; stderr: $STDERR"; fi
+rm -r "$P"
+
 printf '\n%d passed, %d failed\n' "$PASSED" "$FAILED"
 [ "$FAILED" -eq 0 ]
