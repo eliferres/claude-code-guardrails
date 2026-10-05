@@ -671,6 +671,22 @@ every_exit 2 "54 a relative write into a protected name after the folder is lost
   "cd /tmp && { cd ~; }; printf x | tee ../guardrails.json"
 every_exit 0 "55 a relative write to an unprotected name after the folder is lost passes" \
   "if true; then echo x > notes/scratch.txt; fi"
+
+# A heredoc ends at the line equal to its delimiter word after quote removal,
+# whatever characters the word holds; read short, it swallows the commands after
+# it as body. One that never ends is body to the end, and its opener still runs.
+lines() { printf '%s\n' "$@"; }
+TAB="$(printf '\t')"
+every_exit 2 "56 a heredoc delimiter of any shape ends where the shell ends it" \
+  "$(lines 'cat <<"E"OF' 'body' 'EOF' 'echo x > guardrails.json')" \
+  "$(lines 'cat <<END-1' 'body' 'END-1' 'echo x > guardrails.json')" \
+  "$(lines 'cat <<E\OF' 'body' 'EOF' 'echo x > guardrails.json')" \
+  "$(lines 'cat <<EOF.txt' 'body' 'EOF.txt' 'echo x > guardrails.json')" \
+  "$(lines "cat <<-'EOF'" 'body' "${TAB}EOF" 'echo x > guardrails.json')" \
+  "$(lines 'cat > guardrails.json <<EOF' 'body, never ended')"
+every_exit 0 "57 a heredoc body is data until its exact end line" \
+  "$(lines 'cat <<"E"OF' 'echo x > guardrails.json' 'EOF')" \
+  "$(lines 'cat <<EOF' 'echo x > guardrails.json' ' EOF' 'echo x > guardrails.json')"
 rm -r "$P"
 
 printf '\n%d passed, %d failed\n' "$PASSED" "$FAILED"

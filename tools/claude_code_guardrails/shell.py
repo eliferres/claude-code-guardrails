@@ -5,22 +5,61 @@ import glob
 import os
 import re
 import shlex
-from typing import Any, Dict, FrozenSet, Iterator, List, Optional, Tuple
+from typing import Dict, FrozenSet, Iterator, List, NamedTuple, Optional, Tuple
 
 from .git_rules import canonical_git_args
 
 
 # A heredoc body is data for the command that reads it, not more commands: a body
 # line such as `> rules/x.md` must not read as a redirect. `<<<` is a here-string.
-HEREDOC = re.compile(r"(?<!<)<<(?!<)-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1")
+# This finds the operator; heredoc_word reads the delimiter after it.
+HEREDOC = re.compile(r"(?<!<)<<(?!<)-?")
 REDIRECT = re.compile(r"[0-9]*(?:&>>|&>|>>|>\||>&|>|<<<|<<-|<<|<&|<>|<)")
 OPERATORS = ("&&", "||", "|&", ";;", ";", "|", "&", "(", ")", "`", "\n")
 HOME = os.path.expanduser("~")
 
-def heredoc_openers(line: str) -> List[Any]:
+class Heredoc(NamedTuple):
+    start: int         # where its << stands on the opener line
+    delimiter: str     # the end line, quotes and backslashes removed
+    quoted: bool       # any quote or backslash in the word: the body is not expanded
+    strip_tabs: bool   # <<- : leading tabs are dropped from the body and the end line
+
+
+def heredoc_word(line: str, i: int) -> Tuple[str, bool, int]:
+    """The delimiter word starting at `i` (after any blanks) as the shell reads it:
+    every character up to an unquoted blank or operator, with quotes and
+    backslashes removed. -> (delimiter, quoted, index after the word)."""
+    out: List[str] = []
+    quoted, n = False, len(line)
+    while i < n and line[i] in " \t":
+        i += 1
+    while i < n and line[i] not in " \t;&|<>()":
+        c = line[i]
+        if c == "\\" and i + 1 < n:
+            out.append(line[i + 1])
+            quoted, i = True, i + 2
+        elif c in "'\"":
+            end = line.find(c, i + 1)
+            end = n if end < 0 else end
+            body = line[i + 1:end]
+            out.append(re.sub(r'\\([$`"\\])', r"\1", body) if c == '"' else body)
+            quoted, i = True, end + 1
+        else:
+            out.append(c)
+            i += 1
+    return "".join(out), quoted, i
+
+
+def ends_heredoc(line: str, opener: Heredoc) -> bool:
+    """The shell ends a body only at a line exactly equal to the delimiter."""
+    return (line.lstrip("\t") if opener.strip_tabs else line) == opener.delimiter
+
+
+def heredoc_openers(line: str) -> List[Heredoc]:
     """The heredoc openers on one line. A << inside quotes or a comment is text: read
     as an opener, it would swallow the real commands after it as a body."""
-    openers, quote, i = [], "", 0
+    openers: List[Heredoc] = []
+    quote, i = "", 0
     starts = {match.start(): match for match in HEREDOC.finditer(line)}
     while i < len(line):
         c = line[i]
@@ -36,22 +75,27 @@ def heredoc_openers(line: str) -> List[Any]:
         elif c == "#" and (i == 0 or line[i - 1] in " \t;&|("):
             break
         elif i in starts:
-            openers.append(starts[i])
-            i = starts[i].end()
+            operator = starts[i]
+            delimiter, quoted, i = heredoc_word(line, operator.end())
+            if delimiter:
+                openers.append(Heredoc(operator.start(), delimiter, quoted, operator.group() == "<<-"))
             continue
         i += 1
     return openers
 
 
 def strip_heredoc_bodies(command: str) -> str:
-    kept, pending = [], []
+    """The command without its heredoc bodies. A body that never ends runs to the
+    end of the command, as in the shell; its opener line is kept either way."""
+    kept: List[str] = []
+    pending: List[Heredoc] = []
     for line in command.split("\n"):
         if pending:
-            if line.strip() == pending[0]:
+            if ends_heredoc(line, pending[0]):
                 pending.pop(0)
             continue
         kept.append(line)
-        pending.extend(match.group(2) for match in heredoc_openers(line))
+        pending.extend(heredoc_openers(line))
     return "\n".join(kept)
 
 

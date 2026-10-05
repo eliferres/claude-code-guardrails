@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from .config import guard_config, project_dir, target_path
 from .decisions import deny, hook_input
 from .path_rules import matched_pattern
-from .shell import heredoc_openers
+from .shell import Heredoc, ends_heredoc, heredoc_openers
 
 
 # `python3 -c '` followed by its body, with any flags (and one flag value) between.
@@ -39,19 +39,19 @@ def embedded_python_error(body: str) -> Optional[SyntaxError]:
     return error
 
 
-def heredoc_bodies(script: str) -> List[Tuple[int, int, str, Any]]:
-    """-> [(body start, body end, the opener line up to its <<, the opener match)],
+def heredoc_bodies(script: str) -> List[Tuple[int, int, str, Heredoc]]:
+    """-> [(body start, body end, the opener line up to its <<, the opener)],
     read line by line as the shell does, so an opener inside a body is body text."""
     bodies = []
-    pending: List[Tuple[Any, str]] = []
+    pending: List[Tuple[Heredoc, str]] = []
     start, offset = None, 0
     for line in script.split("\n"):
         if pending:
             match, opener = pending[0]
             if start is None:
                 start = offset
-            if line.strip() == match.group(2):
-                bodies.append((start, offset, opener[:match.start()], match))
+            if ends_heredoc(line, match):
+                bodies.append((start, offset, opener[:match.start], match))
                 pending.pop(0)
                 start = None
         else:
@@ -99,15 +99,15 @@ def embedded_python_problem(script: str) -> Optional[str]:
                     % (line_of(match.start()), error.lineno, error.msg))
     for start, stop, opener, match in bodies:
         # Only a quoted tag fed to Python: an unquoted one is expanded by the shell first.
-        if not match.group(1) or not re.search(r"\bpython(?:3(?:\.[0-9]+)?)?\b", opener) or commented_out(start - 1):
+        if not match.quoted or not re.search(r"\bpython(?:3(?:\.[0-9]+)?)?\b", opener) or commented_out(start - 1):
             continue
         body = script[start:stop]
-        if match.group().startswith("<<-"):
+        if match.strip_tabs:
             body = re.sub(r"(?m)^\t+", "", body)
         error = embedded_python_error(body)
         if error:
             return ("the Python in heredoc %s opening at line %d does not compile (python line %s: %s)"
-                    % (match.group(2), line_of(start - 1), error.lineno, error.msg))
+                    % (match.delimiter, line_of(start - 1), error.lineno, error.msg))
     return None
 
 
