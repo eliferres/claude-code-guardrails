@@ -557,14 +557,15 @@ def commands_in_folder(command: str, cwd: Optional[str]) -> Iterator[
     moves it the same way, and popd returns to the folder before the matching
     pushd. After a group or branch, where a cd may or may not have run, the folder
     is unknown (None) but the folders it may be are still listed; after a move the
-    guard cannot read (cd -, a variable, CDPATH, pushd +N, eval, source) that list
-    is empty too."""
+    guard cannot read (cd -, a variable, CDPATH, pushd +N, eval, source, any move
+    inside a loop) that list is empty too."""
     unreadable = reassigned_names(command)
     words: List[str] = []
     redirects: List[Tuple[str, str]] = []
     pending = None
     places: Set[str] = {cwd} if cwd else set()
     branched = False  # past a group or branch: a later move may not have run
+    loops = 0  # open loop bodies: a move there may run any number of times
     # The folder, and where it may be, before each pushd still open.
     pushed: List[Tuple[Optional[str], Set[str]]] = []
     # The folder, where it may be, and the pushd stack, outside each open subshell.
@@ -584,7 +585,9 @@ def commands_in_folder(command: str, cwd: Optional[str]) -> Iterator[
         if words or redirects:
             name, args = (words[0], words[1:]) if words else ("", [])
             yield name, args, redirects, cwd, frozenset(places)
-            if name in ("cd", "pushd") and (name == "cd" or len(args) == 1 and not re.match(r"[+-]", args[0])):
+            if loops and name in ("cd", "pushd", "popd"):
+                cwd, places, pushed = None, set(), []  # repeated, it can land anywhere
+            elif name in ("cd", "pushd") and (name == "cd" or len(args) == 1 and not re.match(r"[+-]", args[0])):
                 if name == "pushd":
                     pushed.append((cwd, set(places)))
                 cwd = folder_after("cd", args, cwd, unreadable)
@@ -601,6 +604,7 @@ def commands_in_folder(command: str, cwd: Optional[str]) -> Iterator[
         words, redirects, pending = [], [], None
         if text in FOLDER_HIDING_WORDS:
             cwd, branched = None, True
+        loops += {"do": 1, "done": -1 if loops else 0}.get(text, 0)
         opens = text == "(" or (text == "`" and not in_backtick)
         closes = text == ")" or (text == "`" and in_backtick)
         if text == "`":
