@@ -611,18 +611,21 @@ def commands_in_folder(command: str, cwd: Optional[str]) -> Iterator[
             if frames and name in ("cd", "pushd", "popd"):
                 cwd, places, pushed = None, set(), []  # it may run again, or at any call
                 moved_in_function = moved_in_function or in_function
+            elif name in ("cd", "pushd", "popd") and text in ("|", "|&"):
+                pass  # piped into something: it runs in a subshell and moves nothing
             elif name in ("cd", "pushd") and (name == "cd" or len(args) == 1 and not re.match(r"[+-]", args[0])):
-                # After ||, the move runs only if what came before it failed.
-                certain = not branched and before_op != "||"
+                # After ||, the move runs only if what came before it failed; at the
+                # end of a pipeline it runs in a subshell in bash, in the shell in zsh.
+                maybe = before_op in ("||", "|", "|&")
                 if name == "pushd":
                     pushed.append((cwd, set(places)))
-                cwd = folder_after("cd", args, cwd, unreadable) if before_op != "||" else None
-                places = moved_places(args, places, certain, unreadable)
+                cwd = folder_after("cd", args, cwd, unreadable) if not maybe else None
+                places = moved_places(args, places, not branched and not maybe, unreadable)
             elif name == "popd" and not args and pushed:
-                certain = not branched and before_op != "||"
+                maybe = before_op in ("||", "|", "|&")
                 cwd, before = pushed.pop()
-                cwd = cwd if before_op != "||" else None
-                places = before if certain else places | before
+                cwd = cwd if not maybe else None
+                places = before if not branched and not maybe else places | before
             elif name in ("pushd", "popd", "eval", "source", "."):
                 # No folder, +N, -N or -n, or text the guard never parsed: lost.
                 cwd, places, pushed = None, set(), []

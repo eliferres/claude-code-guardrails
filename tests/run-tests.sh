@@ -786,6 +786,12 @@ every_exit 0 "67 a harmless command spelled as a brace list passes" \
 # may land in the folder before the cd or the one after.
 every_exit 2 "75 a cd after || may not run" \
   "true || cd sub; echo x > guardrails.json"
+
+# A cd in a pipeline runs in a subshell in bash, so it does not move the shell;
+# zsh runs the last element in the shell itself, where it may.
+every_exit 2 "76 a cd in a pipeline does not move the folder" \
+  "cd sub | true; echo x > guardrails.json" \
+  "true | cd sub; echo x > guardrails.json"
 rm -r "$P"
 
 # When the careful reading fails, the raw text is all the guard has; a command
