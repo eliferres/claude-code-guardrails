@@ -196,6 +196,17 @@ every_exit 2 "38 an ANSI-C quoted word or an unparseable write cannot reach a pr
   "printf x | tee 'guardrails.json"
 every_exit 0 "39 ANSI-C quoting elsewhere still passes" \
   "echo \$'it\\'s' > notes/scratch.md"
+
+# The shell expands a glob in a write target before writing, so the target is
+# every file it matches; one that could match a protected name is refused.
+every_exit 2 "40 a glob write target that matches or could match a protected file is refused" \
+  "echo x > g*.json" \
+  "echo x > rules/team-rules.m?" \
+  "printf x | tee guard[r]ails.json" \
+  "cp /tmp/new.md r*/team-rules.md" \
+  "echo x > ./guardrails.js?n"
+every_exit 0 "41 a glob write target that matches only ordinary files passes" \
+  "echo x > notes/scr*.md"
 rm -r "$P"
 
 # ---------------------------------------------------------------- protected-file lock

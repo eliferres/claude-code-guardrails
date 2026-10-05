@@ -1,5 +1,7 @@
 """Which files a shell command writes, and the check that keeps it off protected ones."""
 
+import fnmatch
+import glob
 import os
 import re
 from typing import FrozenSet, List, Optional
@@ -51,6 +53,24 @@ def written_paths(command: str, cwd: Optional[str]) -> List[str]:
     return found
 
 
+def protected_match(path: str, protected: List[str], root: str) -> Optional[str]:
+    """The protected pattern a write target hits. A target holding * ? or [ is a glob
+    the shell expands first: it hits a protected pattern when any file it matches
+    now does, or when a literal protected path would match it later."""
+    pattern = matched_pattern(path, protected, root)
+    if pattern or not re.search(r"[*?[]", path):
+        return pattern
+    for match in glob.glob(path):
+        pattern = matched_pattern(os.path.realpath(match), protected, root)
+        if pattern:
+            return pattern
+    for pattern in protected:
+        literal = os.path.expanduser(pattern if os.path.isabs(pattern) else os.path.join(root, pattern))
+        if not re.search(r"[*?[]", literal) and fnmatch.fnmatch(literal, path):
+            return pattern
+    return None
+
+
 def shell_write_check(command: str, flat: str, cwd: Optional[str]) -> None:
     """The file lock sees the Write and Edit tools only, so the same protected paths
     are refused here when a shell command would write them."""
@@ -71,7 +91,7 @@ def shell_write_check(command: str, flat: str, cwd: Optional[str]) -> None:
         return
     root = project_dir()
     for path in paths:
-        pattern = matched_pattern(path, protected, root)
+        pattern = protected_match(path, protected, root)
         if pattern:
             deny(
                 "BLOCKED by command-guard [shell-write-protected]: this command writes %s, a\n"
