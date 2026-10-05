@@ -29,6 +29,12 @@ Versions match the git tags.
 - Fixed the demo image check accepting a picture with output rows missing or out of order: it now walks the transcript in order, rebuilds each command from its rows, and requires every output line to be its own row.
 - Fixed `demo/transcript.json`, which recorded exit code 1 for two commands that exit 0 and had an `exit` line typed into their output; it is now regenerated from a real run, and a test replays every entry and checks every row of the demo image against it.
 - Fixed the README opener, which counted four hooks and called liveness the fourth guard: there are three guards, the shipped wiring runs those three plus a cleanup command when a session ends, and liveness is a separate check that proves the guards still block.
+- Fixed the command guard reading a reserved word as the command name, so `{ git push origin +main; }`, `if true; then ...; fi` and `! git push origin +main` hid the command after `{`, `then` or `!` from every rule.
+- Fixed a relative write passing unread after a branch, loop, brace group, `pushd`, `eval` or `source`, where the folder is unknown: `if true; then echo x > guardrails.json; fi` now refuses any such write whose name matches the last part of a protected pattern.
+- Fixed heredoc delimiters that are not plain identifiers (`<<"E"OF`, `<<END-1`, `<<E\OF`, `<<EOF.txt`) never ending, which hid every command after the real end line: the delimiter is now the whole word with quotes removed, and the body ends only at a line exactly equal to it, as in bash.
+- Fixed brace lists in write targets passing unread (`tee {guardrails.json,}`, `echo x > {guardrails.json,}`): targets are now brace-expanded before the check.
+- Fixed a guard that crashed exiting 1, which Claude Code reads as allow: any error inside a guard now refuses the call with one line on stderr.
+- Fixed shortened rm long options (`--rec -f`, `--recursiv --forc`) passing the recursive-delete rule: an unambiguous prefix now reads as the option it names, as GNU rm reads it.
 
 ## [1.1.0](https://github.com/eliferres/claude-code-guardrails/releases/tag/v1.1.0) - 2026-09-03
 
