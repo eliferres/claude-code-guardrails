@@ -732,6 +732,13 @@ every_exit 2 "65 with the shipped config, a protected relative write after a bra
   "if true; then echo x > tools/x.py; fi" \
   "{ true; }; echo x > guardrails.json" \
   "cd tools && if true; then echo x > a.sh; fi"
+
+# The shell expands a brace list in the command word too: {rm,-rf,x} runs rm -rf x.
+every_exit 2 "66 a brace list in the command word is read expanded" \
+  "{rm,-rf,~/proj}" \
+  "{git,push,origin,+main}"
+every_exit 0 "67 a harmless command spelled as a brace list passes" \
+  "{echo,hi}"
 rm -r "$P"
 
 # Claude Code reads any exit but 2 as allow, so a guard that crashes would

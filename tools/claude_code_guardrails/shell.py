@@ -229,7 +229,8 @@ def normalized_tokens(tokens: List[Tuple[str, str]]) -> List[Tuple[str, str]]:
     """The tokens with every command word in one spelling: wrappers (env, command,
     sudo...) and leading VAR=value words dropped, the directory stripped (/bin/rm),
     the name lowercased (a case-insensitive filesystem runs RM as rm), and an alias
-    defined earlier in the same command replaced by its value. A reserved word in
+    defined earlier in the same command replaced by its value, and a brace list in
+    the command word expanded. A reserved word in
     command position ({, if, do, !...) becomes a separator. Arguments are left
     exactly as written."""
     out: List[Tuple[str, str]] = []
@@ -261,6 +262,13 @@ def normalized_tokens(tokens: List[Tuple[str, str]]) -> List[Tuple[str, str]]:
             out.append(("op", text))  # a separator: the next word starts a command
             wrapper = None
             continue
+        if "{" in text:
+            # The shell brace-expands a command word too: {rm,-rf,x} runs rm -rf x.
+            # The words go back on the queue to be read from the start.
+            words = brace_expansions(text)
+            if words != [text]:
+                queue[0:0] = [("word", word) for word in words]
+                continue
         if re.search(r"[*?[]", text):
             # The shell globs a command word too: /bin/r[m] runs /bin/rm, and any
             # further matches become its first arguments.
