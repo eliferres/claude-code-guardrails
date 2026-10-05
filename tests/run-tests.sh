@@ -414,6 +414,32 @@ if [ "$RC" -ne 0 ] && has "deploy.py" "$OUT"; then
 else bad "42 commits on another remote are scanned" "exit $RC: $OUT"; fi
 rm -r "$G"
 
+# The shapes themselves, line by line. Each fake value is joined from pieces
+# here, so no key-shaped line is ever in this tree.
+OUT="$(PYTHONPATH="$ROOT/tools" python3 - <<'PY'
+from claude_code_guardrails.secret_scan import secret_shape
+expected = {
+    "slack-webhook": "url = 'https://hooks.slack.com/services/" + "T0123ABCD/B0123ABCD/" + "a1b2" * 6 + "'",
+    "sendgrid-key": "key = " + "SG" + "." + ("Ab12" * 6)[:22] + "." + ("Cd34" * 11)[:43],
+    "huggingface-token": "HF = " + "hf" + "_" + ("AbCd" * 9)[:34],
+    "pypi-token": "password = " + "pypi-" + "AgEIcHlwaS5vcmc" + ("Ab1_" * 15)[:60],
+    "stripe-webhook-secret": "secret: " + "whsec" + "_" + "Ab12" * 8,
+    None: "token = base64.b64encode(raw).decode()",
+}
+expected["none-call"] = "password = get_password_from_vault_v2()"
+problems = []
+for rule, line in expected.items():
+    want = None if rule in (None, "none-call") else rule
+    got = secret_shape(line)
+    if got != want:
+        problems.append("%r -> %s, wanted %s" % (line[:48], got, want))
+print("\n".join(problems))
+PY
+)"
+if [ -z "$OUT" ]; then
+  ok "47 webhook, SendGrid, Hugging Face, PyPI and webhook-secret shapes are caught; a call or expression is not a secret"
+else bad "47 the added shapes and the generic value check" "$OUT"; fi
+
 # ---------------------------------------------------------------- decision log
 
 P="$(make_project)"

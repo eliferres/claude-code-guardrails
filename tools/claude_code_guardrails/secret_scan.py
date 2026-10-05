@@ -24,10 +24,17 @@ SECRET_SHAPES = [
     ("google-api-key", re.compile(r"\bAIza[0-9A-Za-z_-]{35}\b")),
     ("npm-token", re.compile(r"\bnpm_[A-Za-z0-9]{36}\b")),
     ("private-key", re.compile(r"-----BEGIN[ A-Z0-9_-]{0,100}PRIVATE KEY(?: BLOCK)?-----")),
+    ("slack-webhook", re.compile(r"https://hooks\.slack\.com/(?:services|workflows)/[A-Za-z0-9+/]{30,}")),
+    ("sendgrid-key", re.compile(r"\bSG\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}\b")),
+    ("huggingface-token", re.compile(r"\bhf_[A-Za-z]{34}\b")),
+    ("pypi-token", re.compile(r"\bpypi-AgEIcHlwaS5vcmc[A-Za-z0-9_-]{50,}")),
+    ("stripe-webhook-secret", re.compile(r"\bwhsec_[A-Za-z0-9]{32,}\b")),
 ]
 # A name that says secret, assigned a literal of 16 or more key characters. The
 # value must mix letters and digits, which keeps placeholders such as
-# "your-api-key-here" and references such as ${DB_PASSWORD} out of it.
+# "your-api-key-here" and references such as ${DB_PASSWORD} out of it. An
+# unquoted value that is a call or a dotted name (b64encode(raw), cfg.api_token)
+# is code computing a secret, not a secret.
 GENERIC_SECRET = re.compile(
     r"(?i)[a-z0-9_.-]*(?:api[_-]?key|secret|token|passw(?:or)?d|access[_-]?key)[a-z0-9_.-]*"
     r"[\"']?\s*[:=]\s*[\"']?([A-Za-z0-9_+/=.-]{16,})")
@@ -40,7 +47,10 @@ def secret_shape(line: str) -> Optional[str]:
             return rule
     for match in GENERIC_SECRET.finditer(line):
         value = match.group(1)
-        if re.search(r"[A-Za-z]", value) and re.search(r"[0-9]", value):
+        quoted = line[match.start(1) - 1:match.start(1)] in ("'", '"')
+        after = line[match.end(1):match.end(1) + 1]
+        expression = after in ("(", "[") or re.fullmatch(r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)+", value)
+        if (quoted or not expression) and re.search(r"[A-Za-z]", value) and re.search(r"[0-9]", value):
             return "generic-secret"
     return None
 

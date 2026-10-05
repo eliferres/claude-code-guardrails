@@ -215,10 +215,12 @@ printf '#!/bin/sh\nexec claude-code-guardrails secret-scan "$@"\n' > .git/hooks/
 The shapes follow the public gitleaks rules, kept to ones with a fixed vendor
 prefix or frame so a hit is almost never wrong: `aws-access-key`, `github-token`,
 `gitlab-token`, `slack-token`, `stripe-key`, `anthropic-key`, `openai-key`,
-`google-api-key`, `npm-token` and `private-key`. One looser shape,
+`google-api-key`, `npm-token`, `private-key`, `slack-webhook`, `sendgrid-key`,
+`huggingface-token`, `pypi-token` and `stripe-webhook-secret`. One looser shape,
 `generic-secret`, catches a name like `api_key` or `password` assigned a literal
-of 16 or more characters mixing letters and digits; it is the one most likely to
-fire on a test fixture. Paths listed in `.secret-scan-allow` at the top of the
+of 16 or more characters mixing letters and digits (an unquoted call or dotted
+name, such as `b64encode(raw)`, is code, not a literal); it is the one most
+likely to fire on a test fixture. Paths listed in `.secret-scan-allow` at the top of the
 repository (one glob per line, `#` for comments) are skipped, which is where
 fake keys in fixtures belong. There is no override flag: a real key gets taken
 out of the commits, not waved through.
