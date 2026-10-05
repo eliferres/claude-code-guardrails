@@ -6,7 +6,8 @@ Versions match the git tags.
 
 ### Added
 - Added shell-write protection: the command guard refuses a redirect, `tee`, `sed -i`, `cp` or `mv` into a file the protected-file lock covers, a route that walked past the lock because it only checks the Write and Edit tools.
-- Added spelling-proof matching: a refused command written as `'rm'`, `r\m`, `/bin/Rm`, `env bash`, `command rm`, `RM` or through an alias defined in the same command is refused like the plain spelling.
+- Added spelling-proof matching for the command word: a refused command written as `'rm'`, `r\m`, `$'rm'`, `/bin/Rm`, `/bin/r[m]`, `env bash`, `command rm`, `RM`, with `$IFS` separators, inside `sh -c` or `eval`, or through an alias defined in the same command is refused like the plain spelling.
+- Added argument parsing for `rm` and `git push`: flags in any order, cluster or long form (`-r --force`, `-rv -f`, `--recursive -f`), git's global options (`-c k=v`, `-C dir`) and every way of forcing a push (`-f`, `-fu`, a `+main` refspec) match the shipped rules.
 - Added temp-safe deletes: a recursive `rm` whose every path resolves inside `$TMPDIR`, `/tmp` or `/var/tmp` passes, switched on per rule with `"allow_in_temp": true` and on in the shipped recursive-delete rule.
 - Added the syntax guard (`tools/syntax-guard.sh`, `claude-code-guardrails syntax-guard`): a Write or Edit that would leave a shell or Python file unparseable is refused before it lands, including Python embedded in a shell file, where an apostrophe in a single-quoted `python3 -c` body passes `bash -n` and runs cut off.
 - Added an optional git pre-push secret scan (`tools/pre-push-secret-scan.sh`, `claude-code-guardrails secret-scan`): a push whose commits add a vendor-prefixed key, a private key block or a generic `name = secret` literal is refused, naming the file and shape but never the value; fixture paths go in `.secret-scan-allow`.

@@ -1,10 +1,13 @@
 """Reading a shell command the way the shell would: words, operators, redirects,
 the command word in one spelling, and the folder each command runs in."""
 
+import glob
 import os
 import re
 import shlex
 from typing import Dict, FrozenSet, Iterator, List, Optional, Tuple
+
+from .git_rules import canonical_git_args
 
 
 # A heredoc body is data for the command that reads it, not more commands: a body
@@ -111,6 +114,9 @@ def shell_tokens(command: str) -> List[Tuple[str, str]]:
         elif c == "#" and not in_word:
             end = command.find("\n", i)
             i = n if end < 0 else end
+        elif c == "$" and re.match(r"\$(IFS\b|\{IFS\})", command[i:]):
+            flush()  # unquoted $IFS expands to a separator: rm${IFS}-rf is two words
+            i += 4 if command.startswith("$IFS", i) else 6
         elif c == "$" and command.startswith("$(", i):
             flush()
             tokens.append(("op", "("))
@@ -176,6 +182,13 @@ def normalized_tokens(tokens: List[Tuple[str, str]]) -> List[Tuple[str, str]]:
             continue
         if ASSIGNMENT.match(text):
             continue
+        if re.search(r"[*?[]", text):
+            # The shell globs a command word too: /bin/r[m] runs /bin/rm, and any
+            # further matches become its first arguments.
+            matches = sorted(glob.glob(text))
+            if matches:
+                text = matches[0]
+                queue[0:0] = [("word", match) for match in matches[1:]]
         name = os.path.basename(text).lower()
         if name in WRAPPERS:
             wrapper = name
@@ -193,20 +206,81 @@ def command_tokens(command: str) -> List[Tuple[str, str]]:
     return normalized_tokens(shell_tokens(strip_heredoc_bodies(command)))
 
 
-def normalized_command(command: str) -> Optional[str]:
+RM_LONG_FLAGS = {"--recursive": "r", "--force": "f", "--dir": "d", "--verbose": "v",
+                 "--interactive": "i"}
+SHELLS = {"sh", "bash", "zsh", "dash", "ksh"}
+
+
+def canonical_rm_args(args: List[str]) -> List[str]:
+    """rm's arguments with every flag gathered into one sorted cluster in front:
+    -r --force, -rv -f and --recursive -f all become -fr (-frv), wherever they
+    stood. -R is -r. Words after -- are operands, as rm reads them."""
+    letters, rest, operands_only = set(), [], False
+    for arg in args:
+        if operands_only or arg == "-" or not arg.startswith("-"):
+            rest.append(arg)
+        elif arg == "--":
+            operands_only = True
+            rest.append(arg)
+        elif arg.startswith("--"):
+            letters.update(RM_LONG_FLAGS.get(arg.split("=", 1)[0], ""))
+        else:
+            letters.update(arg[1:].replace("R", "r"))
+    return (["-" + "".join(sorted(letters))] if letters else []) + rest
+
+
+def nested_script(name: str, args: List[str]) -> Optional[str]:
+    """The command text a shell -c or eval will run, if this is one."""
+    if name == "eval":
+        return " ".join(args)
+    if name in SHELLS:
+        for index, arg in enumerate(args):
+            if re.fullmatch(r"-[A-Za-z]*c[A-Za-z]*", arg) and index + 1 < len(args):
+                return args[index + 1]
+    return None
+
+
+def render_command(words: List[str], depth: int) -> str:
+    name, args = words[0], words[1:]
+    if name == "rm":
+        args = canonical_rm_args(args)
+    elif name == "git":
+        args = canonical_git_args(args)
+    text = " ".join(shlex.quote(word) for word in [name] + args)
+    script = nested_script(name, args)
+    if script and depth < 3:
+        inner = normalized_command(script, depth + 1)
+        if inner:
+            text += " ; " + inner
+    return text
+
+
+def normalized_command(command: str, depth: int = 0) -> Optional[str]:
     """The command rendered back to one line from its normalized tokens, so the
     configured rule patterns can be matched against it as well as the raw text.
-    None when the command does not parse."""
+    rm and git get their arguments in one spelling too, and the text a shell -c or
+    eval runs is appended, read the same way. None when the command does not parse."""
     try:
         tokens = command_tokens(command)
     except ValueError:
         return None
-    parts = []
+    parts: List[str] = []
+    words: List[str] = []
+    target_next = False
     for kind, text in tokens:
+        if kind == "word" and not target_next:
+            words.append(text)
+            continue
+        if words:
+            parts.append(render_command(words, depth))
+            words = []
         if kind == "word":
-            parts.append(shlex.quote(text))
+            parts.append(shlex.quote(text))  # a redirect's target
         else:
             parts.append(";" if text == "\n" else text)
+        target_next = kind == "redirect"
+    if words:
+        parts.append(render_command(words, depth))
     return " ".join(parts)
 
 

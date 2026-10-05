@@ -207,6 +207,30 @@ every_exit 2 "40 a glob write target that matches or could match a protected fil
   "echo x > ./guardrails.js?n"
 every_exit 0 "41 a glob write target that matches only ordinary files passes" \
   "echo x > notes/scr*.md"
+
+# Flags in any order, cluster or long form, separators the shell expands, a
+# command word the shell globs, and a command handed to sh -c or eval.
+every_exit 2 "43 rm and git push are read by their arguments, not their text" \
+  "rm -r --force ~/projects" \
+  "rm -rv -f ~/projects" \
+  "rm --recursive -f ~/projects" \
+  "rm \$'-rf' ~/projects" \
+  "rm\${IFS}-rf\${IFS}~/projects" \
+  "/bin/r[m] -rf ~/projects" \
+  "sh -c 'RM -rf ~/projects'" \
+  "bash -lc \"r''m -rf ~/projects\"" \
+  "eval 'RM -rf ~/projects'" \
+  "git push -fu origin main" \
+  "git push origin +main" \
+  "git push origin +HEAD:refs/heads/master" \
+  "git -c core.askpass=true push -f origin main" \
+  "git --no-pager -C . push --force origin main"
+every_exit 0 "44 the narrower forms stay allowed" \
+  "git push --force-with-lease origin main" \
+  "git push -u origin main" \
+  "git push origin +feature" \
+  "rm -r ~/projects/build" \
+  "sh -c 'ls -la'"
 rm -r "$P"
 
 # ---------------------------------------------------------------- protected-file lock

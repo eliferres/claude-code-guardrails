@@ -54,12 +54,18 @@ the shape it caught and the safe way to do the same job. One exact command can
 be allowlisted; a shape cannot.
 
 Each rule is matched twice: against the command as written, and against the
-same command with every command word in one spelling. That second reading drops
-quotes and backslashes (`'rm'`, `r\m`), the directory (`/bin/rm`), wrappers
-(`env`, `command`, `sudo`, `nohup`) and leading `VAR=value` words, lowercases
-the name (macOS finds `RM` as `rm` on its default case-insensitive disk), and
-expands an alias defined earlier in the same command. Only the command word is
-rewritten, so a rule's view of the arguments never changes.
+same command parsed the way the shell would and written back in one spelling.
+That reading removes quotes and backslashes (`'rm'`, `r\m`, `$'-rf'`), splits
+on an unquoted `$IFS`, expands a glob in the command word (`/bin/r[m]`), drops
+the directory (`/bin/rm`), wrappers (`env`, `command`, `sudo`, `nohup`) and
+leading `VAR=value` words, lowercases the name (macOS finds `RM` as `rm` on its
+default case-insensitive disk), and expands an alias defined earlier in the same
+command. Two commands also get their arguments rewritten: `rm` has its flags
+gathered into one cluster (`-r --force`, `-rv -f` and `--recursive -f` all read
+as `-fr`), and `git` loses its global options (`-c k=v`, `-C dir`), with every
+way of forcing a push (`-f`, `-fu`, a `+main` refspec) read as `--force`. The
+text handed to `sh -c`, `bash -lc` or `eval` is read the same way, three levels
+deep.
 
 A rule with `"allow_in_temp": true` (the shipped recursive-delete rule has it)
 lets a recursive `rm` through when the command is nothing but `rm` and `cd`
@@ -339,9 +345,12 @@ are blocked, it is that you can still prove, months later, that they are.
   deliberately: a config typo must not brick the harness. Each one prints one
   warning on stderr naming the config and what was wrong with it, and liveness
   is what tells you a guard went quiet.
-- The command guard reads the command, not what it runs. Variable indirection
-  (`$CMD -rf x`), an alias from your shell profile and a script that wraps the
-  dangerous call will walk past it.
+- The command guard reads the command, not what it runs. A command held in a
+  variable (`$CMD -rf x`) or built by a substitution, an alias from your shell
+  profile, a git alias (`git -c alias.p=push p -f`), a script file that wraps
+  the dangerous call, and a nested `sh -c` more than three levels deep will walk
+  past it. Arguments are parsed for `rm` and `git` only; every other rule
+  matches its pattern against the text and the normalized command.
 - Exercised with Claude Code. Any harness that can run a hook script and read an
   exit code can use these, but the payload shape is Claude Code's.
 
