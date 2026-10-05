@@ -83,13 +83,20 @@ def allowed_paths(top: str) -> List[str]:
 
 
 def secret_scan(argv: List[str]) -> int:
-    """git pre-push hook: git passes "<local ref> <local sha> <remote ref> <remote sha>"
-    on stdin, one line per ref being pushed. Exit 1 refuses the whole push."""
+    """git pre-push hook: git runs it as `<hook> <remote name> <url>` and passes
+    "<local ref> <local sha> <remote ref> <remote sha>" on stdin, one line per ref
+    being pushed. Exit 1 refuses the whole push."""
     top = git(["rev-parse", "--show-toplevel"])
     if top.returncode != 0:
         sys.stderr.write("%s: not inside a git repository\n" % PROG)
         return DENY
     allow = allowed_paths(top.stdout.strip())
+    # Only this remote's own tracking branches say what it already has: a commit on
+    # a private mirror is still new to a public remote. Pushing to a bare URL, with
+    # no tracking branches at all, scans everything the pushed tip reaches.
+    remote = argv[0] if argv else ""
+    known_remote = remote in git(["remote"]).stdout.split()
+    already_there = ["--not", "--remotes=%s" % remote] if known_remote else []
     findings = []
     for line in sys.stdin.read().splitlines():
         fields = line.split()
@@ -98,8 +105,8 @@ def secret_scan(argv: List[str]) -> int:
         local_sha, remote_sha = fields[1], fields[3]
         known = not ZERO_SHA.match(remote_sha) and git(["cat-file", "-e", remote_sha]).returncode == 0
         # A new branch, or a remote tip this clone has never seen: scan every commit
-        # no remote-tracking branch already holds.
-        revisions = ["%s..%s" % (remote_sha, local_sha)] if known else [local_sha, "--not", "--remotes"]
+        # this remote's tracking branches do not already hold.
+        revisions = ["%s..%s" % (remote_sha, local_sha)] if known else [local_sha] + already_there
         try:
             for commit, path, text in added_lines(revisions):
                 rule = secret_shape(text)

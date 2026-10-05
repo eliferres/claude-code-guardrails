@@ -368,6 +368,17 @@ OUT2="$(push)"; RC2=$?
 if [ "$RC" -ne 0 ] && has "generic-secret" "$OUT" && [ "$RC2" -eq 0 ]; then
   ok "32 a generic key=value secret is refused; a variable reference or a placeholder is not"
 else bad "32 the generic key=value shape" "exit $RC/$RC2: $OUT $OUT2"; fi
+
+# A commit already on another remote is still new to this one: a key that
+# reached a private mirror must not ride along to a public remote unread.
+git init -q --bare "$G/mirror.git"
+gitq remote add mirror "$G/mirror.git"
+printf 'AWS_ACCESS_KEY_ID = "%s"\n' "$AWS_KEY" > "$G/work/deploy.py"; commit deploy.py "add deploy settings"
+gitq -c core.hooksPath=/dev/null push -q mirror HEAD:refs/heads/release 2>/dev/null
+OUT="$(gitq push -q origin HEAD:refs/heads/release 2>&1)"; RC=$?
+if [ "$RC" -ne 0 ] && has "deploy.py" "$OUT"; then
+  ok "42 commits already on a different remote are still scanned on the way to this one"
+else bad "42 commits on another remote are scanned" "exit $RC: $OUT"; fi
 rm -r "$G"
 
 # ---------------------------------------------------------------- decision log
