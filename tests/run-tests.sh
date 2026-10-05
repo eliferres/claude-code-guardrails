@@ -659,6 +659,18 @@ every_exit 2 "52 a cd inside a branch still leaves the folder unknown for the te
 every_exit 0 "53 a reserved word as an argument is only a word" \
   "echo if then { rm" \
   "if true; then git push origin feature; fi"
+
+# After a branch, a loop, a brace group or a pushd the folder is unknown, so a
+# relative write target cannot be placed; one carrying a protected file's name
+# is refused wherever it might land.
+every_exit 2 "54 a relative write into a protected name after the folder is lost is refused" \
+  "{ cp x guardrails.json; }" \
+  "if true; then echo x > guardrails.json; fi" \
+  "{ true; }; echo x > guardrails.json" \
+  "pushd rules; echo x > team-rules.md" \
+  "cd /tmp && { cd ~; }; printf x | tee ../guardrails.json"
+every_exit 0 "55 a relative write to an unprotected name after the folder is lost passes" \
+  "if true; then echo x > notes/scratch.txt; fi"
 rm -r "$P"
 
 printf '\n%d passed, %d failed\n' "$PASSED" "$FAILED"

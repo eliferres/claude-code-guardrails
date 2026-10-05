@@ -3,7 +3,7 @@
 import glob
 import os
 import re
-from typing import FrozenSet, List, Optional
+from typing import FrozenSet, List, Optional, Tuple
 
 from .config import config_path, guard_config, project_dir
 from .decisions import deny
@@ -31,11 +31,12 @@ def copy_destinations(args: List[str], cwd: Optional[str], unreadable: FrozenSet
     return [destination]
 
 
-def written_paths(command: str, cwd: Optional[str]) -> List[str]:
-    """Every file this command writes through a redirect, tee, sed -i, cp or mv,
-    resolved to a real path."""
+def written_paths(command: str, cwd: Optional[str]) -> Tuple[List[str], List[str]]:
+    """Every file this command writes through a redirect, tee, sed -i, cp or mv:
+    (the ones resolved to a real path, the relative ones written in a folder the
+    guard lost track of, as written)."""
     unreadable = reassigned_names(command)
-    found = []
+    found, unplaced = [], []
     for name, args, redirects, folder in commands_in_folder(command, cwd):
         targets = [target for op, target in redirects
                    if ">" in op and not (op.endswith("&") and re.fullmatch(r"[0-9]+|-", target))]
@@ -49,7 +50,10 @@ def written_paths(command: str, cwd: Optional[str]) -> List[str]:
             path = resolve_word(target, folder, unreadable)
             if path and path != "/dev/null":
                 found.append(path)
-    return found
+            elif path is None and folder is None and not re.match(r"[/~]", target) \
+                    and not re.search(r"[$`]", target):
+                unplaced.append(target)
+    return found, unplaced
 
 
 def protected_match(path: str, protected: List[str], root: str) -> Optional[str]:
@@ -70,6 +74,28 @@ def protected_match(path: str, protected: List[str], root: str) -> Optional[str]
     return None
 
 
+def unplaced_match(target: str, protected: List[str]) -> Optional[str]:
+    """The protected pattern a relative target written in an unknown folder could
+    hit. That folder could be any folder, so the target hits every pattern whose
+    last part its name matches."""
+    name = os.path.basename(target.rstrip("/"))
+    for pattern in protected:
+        last = os.path.basename(pattern)
+        if path_matches(name, last) or (re.search(r"[*?[]", name) and path_matches(last, name)):
+            return pattern
+    return None
+
+
+def refuse_write(what: str, pattern: str, flat: str) -> None:
+    deny(
+        "BLOCKED by command-guard [shell-write-protected]: this command writes %s\n"
+        "  (it matches `%s` in %s).\n"
+        "  command: %s\n"
+        "  instead: make the change with the Write or Edit tool, where the file lock asks\n"
+        "  for an approval token; a shell write would go around that check."
+        % (what, pattern, config_path(), flat), "shell-write-protected")
+
+
 def shell_write_check(command: str, flat: str, cwd: Optional[str]) -> None:
     """The file lock sees the Write and Edit tools only, so the same protected paths
     are refused here when a shell command would write them."""
@@ -77,7 +103,7 @@ def shell_write_check(command: str, flat: str, cwd: Optional[str]) -> None:
     if not protected:
         return
     try:
-        paths = written_paths(command, cwd)
+        paths, unplaced = written_paths(command, cwd)
     except ValueError as error:
         # Unparseable means unreadable, not harmless: refuse it when it could write.
         if re.search(r">|\b(tee|sed|cp|mv)\b", command):
@@ -92,10 +118,10 @@ def shell_write_check(command: str, flat: str, cwd: Optional[str]) -> None:
     for path in paths:
         pattern = protected_match(path, protected, root)
         if pattern:
-            deny(
-                "BLOCKED by command-guard [shell-write-protected]: this command writes %s, a\n"
-                "  protected file (it matches `%s` in %s).\n"
-                "  command: %s\n"
-                "  instead: make the change with the Write or Edit tool, where the file lock asks\n"
-                "  for an approval token; a shell write would go around that check."
-                % (path, pattern, config_path(), flat), "shell-write-protected")
+            refuse_write("%s, a protected file" % path, pattern, flat)
+    for target in unplaced:
+        pattern = unplaced_match(target, protected)
+        if pattern:
+            refuse_write("%s in a folder the guard lost track of (after a branch, a loop,\n"
+                         "  a brace group, pushd, eval or source), where it could be a protected file"
+                         % target, pattern, flat)
