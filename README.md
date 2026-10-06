@@ -125,6 +125,10 @@ built from a command substitution or from a variable other than `$HOME` and
 write after a `cd` into an unquoted substitution (`cd $(git rev-parse
 --show-toplevel)/tools`).
 
+This refuses ordinary commands too: after
+`cd "$PROJECT_DIR" && npm run build > build.log` the guard cannot see the
+folder, and `tools/*` matches `build.log` by name.
+
 **Cross-session write claims.** Two agent sessions on one file means the second
 write silently eats the first. The first writer claims the file; a second
 session is refused, told who holds it and for how long, and given two ways out:
