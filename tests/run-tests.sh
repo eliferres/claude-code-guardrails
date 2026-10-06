@@ -352,16 +352,20 @@ if [ "$SYNTAX_OK" -eq 1 ] && [ "$RC" -eq 2 ] && has "Edit would leave" "$OUT"; t
   ok "31 a parseable write passes, and an Edit is judged by the whole file it would leave"
 elif [ "$SYNTAX_OK" -eq 1 ]; then bad "31 an Edit that breaks the file is refused" "exit $RC: $OUT"; fi
 
-# MultiEdit reaches the write guards through the same matcher. The syntax guard
-# applies every edit in order and parses the file they leave together.
+# The syntax guard applies a MultiEdit's edits in order and parses the file they
+# leave together: this pair parses only whole, so its first edit alone is refused.
+# The file lock reads a MultiEdit's file_path like any other write.
 printf '#!/usr/bin/env bash\necho one\necho two\n' > "$P/multi.sh"
-OUT="$(multiedit_payload "$P/multi.sh" "echo one" "if true; then" "echo two" "echo three" \
+OUT="$(multiedit_payload "$P/multi.sh" "echo one" "if true; then echo a" "echo two" "fi" \
   | GUARDRAILS_PROJECT_DIR="$P" bash "$SYNTAX_GUARD" 2>&1)"; RC=$?
-OUT2="$(multiedit_payload "$P/rules/team-rules.md" "team" "our" \
-  | GUARDRAILS_PROJECT_DIR="$P" bash "$LOCK_GUARD" 2>&1)"; RC2=$?
-if [ "$RC" -eq 2 ] && has "MultiEdit would leave" "$OUT" && [ "$RC2" -eq 2 ] && has "no approval token" "$OUT2"; then
-  ok "79 a MultiEdit is judged by the file all its edits leave, and needs a token on a protected path"
-else bad "79 MultiEdit is refused by the syntax guard and the file lock" "exit $RC/$RC2: $OUT $OUT2"; fi
+OUT2="$(multiedit_payload "$P/multi.sh" "echo one" "if true; then echo a" \
+  | GUARDRAILS_PROJECT_DIR="$P" bash "$SYNTAX_GUARD" 2>&1)"; RC2=$?
+OUT3="$(multiedit_payload "$P/rules/team-rules.md" "team" "our" \
+  | GUARDRAILS_PROJECT_DIR="$P" bash "$LOCK_GUARD" 2>&1)"; RC3=$?
+if [ "$RC" -eq 0 ] && [ "$RC2" -eq 2 ] && has "MultiEdit would leave" "$OUT2" \
+   && [ "$RC3" -eq 2 ] && has "no approval token" "$OUT3"; then
+  ok "79 a MultiEdit is parsed as the file all its edits leave, and the lock refuses one on a protected path"
+else bad "79 a MultiEdit is parsed whole and needs a token on a protected path" "exit $RC/$RC2/$RC3: $OUT $OUT2 $OUT3"; fi
 
 # A versioned interpreter name runs the same cut-off body, and a zsh script is
 # parsed by zsh: its glob qualifiers are not bash syntax errors.
@@ -605,6 +609,29 @@ OUT="$(bash ./demo-transcript.sh picture 2>&1)"; RC=$?
 if [ "$RC" -eq 0 ]; then
   ok "47 every row of demo/terminal.svg comes from the transcript"
 else bad "47 the demo picture comes from the transcript" "$OUT"; fi
+
+# A write tool missing from the shipped matcher never reaches the write guards,
+# and the README's wiring is what readers copy, so both must name all four.
+# (Output goes to a file: bash 3.2 misreads a quote in a heredoc inside $(...).)
+T="$(mktemp "${TMPDIR:-/tmp}/guardrails-matcher.XXXXXX")"
+python3 - "$ROOT" >"$T" 2>&1 <<'PY'
+import json, os, sys
+root = sys.argv[1]
+settings = json.load(open(os.path.join(root, "demo", ".claude", "settings.json")))
+matchers = [entry["matcher"] for entry in settings["hooks"]["PreToolUse"]
+            if any("file-lock-guard.sh" in hook["command"] for hook in entry["hooks"])]
+if len(matchers) != 1:
+    sys.exit("expected one write matcher, found %r" % matchers)
+missing = {"Write", "Edit", "MultiEdit", "NotebookEdit"} - set(matchers[0].split("|"))
+if missing:
+    sys.exit("the write matcher %r leaves out %s" % (matchers[0], ", ".join(sorted(missing))))
+if '"matcher": "%s"' % matchers[0] not in open(os.path.join(root, "README.md")).read():
+    sys.exit("the README wiring does not carry the matcher %r" % matchers[0])
+PY
+RC=$?; OUT="$(cat "$T")"; rm "$T"
+if [ "$RC" -eq 0 ]; then
+  ok "80 the shipped write matcher names every write tool, and the README wiring matches it"
+else bad "80 the write matcher names every write tool" "exit $RC: $OUT"; fi
 
 # ---------------------------------------------------------------- the invoked name
 
