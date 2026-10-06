@@ -352,6 +352,17 @@ if [ "$SYNTAX_OK" -eq 1 ] && [ "$RC" -eq 2 ] && has "Edit would leave" "$OUT"; t
   ok "31 a parseable write passes, and an Edit is judged by the whole file it would leave"
 elif [ "$SYNTAX_OK" -eq 1 ]; then bad "31 an Edit that breaks the file is refused" "exit $RC: $OUT"; fi
 
+# MultiEdit reaches the write guards through the same matcher. The syntax guard
+# applies every edit in order and parses the file they leave together.
+printf '#!/usr/bin/env bash\necho one\necho two\n' > "$P/multi.sh"
+OUT="$(multiedit_payload "$P/multi.sh" "echo one" "if true; then" "echo two" "echo three" \
+  | GUARDRAILS_PROJECT_DIR="$P" bash "$SYNTAX_GUARD" 2>&1)"; RC=$?
+OUT2="$(multiedit_payload "$P/rules/team-rules.md" "team" "our" \
+  | GUARDRAILS_PROJECT_DIR="$P" bash "$LOCK_GUARD" 2>&1)"; RC2=$?
+if [ "$RC" -eq 2 ] && has "MultiEdit would leave" "$OUT" && [ "$RC2" -eq 2 ] && has "no approval token" "$OUT2"; then
+  ok "79 a MultiEdit is judged by the file all its edits leave, and needs a token on a protected path"
+else bad "79 MultiEdit is refused by the syntax guard and the file lock" "exit $RC/$RC2: $OUT $OUT2"; fi
+
 # A versioned interpreter name runs the same cut-off body, and a zsh script is
 # parsed by zsh: its glob qualifiers are not bash syntax errors.
 sed 's/python3 -c/python3.11 -c/' "$P/apostrophe.sh" > "$P/versioned.sh"

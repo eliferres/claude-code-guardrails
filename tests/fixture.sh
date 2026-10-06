@@ -92,3 +92,11 @@ edit_payload() {
   python3 -c 'import json, sys
 print(json.dumps({"tool_name": "Edit", "tool_input": {"file_path": sys.argv[1], "old_string": sys.argv[2], "new_string": sys.argv[3]}}))' "$1" "$2" "$3"
 }
+
+# A MultiEdit payload: the file, then old/new pairs applied in order.
+multiedit_payload() {
+  python3 -c 'import json, sys
+pairs = sys.argv[2:]
+edits = [{"old_string": old, "new_string": new} for old, new in zip(pairs[::2], pairs[1::2])]
+print(json.dumps({"tool_name": "MultiEdit", "tool_input": {"file_path": sys.argv[1], "edits": edits}}))' "$@"
+}
