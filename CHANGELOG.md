@@ -2,6 +2,11 @@
 
 Versions match the git tags.
 
+## Unreleased
+
+### Fixed
+- Fixed the shipped write matcher, which left out MultiEdit: if you copied the 1.2.0 wiring, add MultiEdit to its write matcher, or a MultiEdit walks past the file lock, the claims guard and the syntax guard.
+
 ## [1.2.0](https://github.com/eliferres/claude-code-guardrails/releases/tag/v1.2.0) - 2026-10-04
 
 ### Added
@@ -19,7 +24,7 @@ Versions match the git tags.
 - Listed the command guard's rules in a README table: each rule's id, what it refuses and why.
 - Added license, Python and dependency badges beside the CI badge.
 - Gave liveness and the file list their own README sections, put install first, and renamed the wiring section, so the reading order is install, guards, liveness, wiring, walkthrough.
-- Moved `tools/guardrails.py` into the package `tools/claude_code_guardrails/`, one module per job, so an install cannot shadow the `guardrails` package from guardrails-ai.
+- Moved `tools/guardrails.py` into the package `tools/claude_code_guardrails/`, split into modules, so an install cannot shadow the `guardrails` package from guardrails-ai.
 - Reworded the README's shell-write section to say the command guard narrows the shell route to protected files rather than closing it, and listed in Limitations the shapes that still pass: script text fed to a shell on its input, `env -S`, `coproc`, `function` bodies, and `timeout`, `xargs` and `find -exec`.
 
 ### Fixed
