@@ -158,7 +158,7 @@ blocking, or if a red case still passes with the guard stubbed out. That last
 check is the point: a test that passes without the guard was never testing the
 guard.
 
-Every bypass a review found, and the commit that closed it:
+Every bypass a review found, what closed it, and what is still open:
 [docs/what-slipped.md](docs/what-slipped.md).
 
 ## The decision log: retiring a noisy rule
@@ -413,12 +413,13 @@ are blocked, it is that you can still prove, months later, that they are.
 - `tools/claims-takeover.sh`: takes a claim and ledgers what it displaced.
 - `tools/liveness.sh`: proves every guard in the manifest still goes red.
 - `tools/pre-push-secret-scan.sh`: optional git pre-push hook, refuses a push that adds a credential.
-- `tools/claude_code_guardrails/`: the implementation every shim calls, one module per job plus the shell reader. Stdlib only.
+- `tools/claude_code_guardrails/`: the implementation every shim calls, split into modules, plus the shell reader. Stdlib only.
 - `guardrails.json`: one config, holding the rules, allowlist, protected paths, claims and manifest.
 - `demo/`: a fictional workspace and the hook wiring, for the walkthrough.
 - `tests/run-tests.sh`: the suite, real fixtures in temp dirs, no mocks.
 - `tests/red/`: one red case per blocked shape; liveness runs these.
 - `tests/demo-transcript.sh`: replays `demo/transcript.json` and checks the image against it.
+- `docs/what-slipped.md`: every bypass a review found, the commit that closed it and the test that pins it.
 
 State lives in `.guardrails/` inside the project: the approval token, the claims
 registry, the takeover ledger, the approval log and the decision log. Keep it
