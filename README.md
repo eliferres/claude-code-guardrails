@@ -1,6 +1,6 @@
 # claude-code-guardrails
 
-Four guards for Claude Code that refuse a dangerous command, a protected write, a colliding session, or an unparseable script, and say what to do instead. No model in the loop.
+Four guards for Claude Code that refuse dangerous commands, protected writes, colliding sessions or unparseable scripts before they run, and say what to do instead. No model in the loop.
 
 Bash and Python 3.9+, nothing else.
 
@@ -93,7 +93,7 @@ track of after a brace group, branch, `eval` or `source`.
 | `curl-pipe-to-shell` | `curl` or `wget` piped into a shell | executes code nobody read |
 | `git-reset-hard` | `git reset --hard` | throws away uncommitted work with no recovery path |
 | `git-clean-force` | `git clean -f` | deletes untracked files git never had a copy of |
-| `shell-write-protected` | a redirect, `tee`, `sed -i`, `cp` or `mv` into a file the lock protects | the lock sees the Write and Edit tools; a shell write would go around it |
+| `shell-write-protected` | a redirect, `tee`, `sed -i`, `cp` or `mv` into a file the lock protects | the lock sees the Write, Edit and MultiEdit tools; a shell write would go around it |
 
 **Protected-file lock.** A PreToolUse hook on writes. Files you list as
 high-stakes (settings, hook scripts, the rules the agent reads every session)
@@ -136,15 +136,16 @@ release the claim, or take it over. A takeover is logged, and what the displaced
 session was holding is written to a ledger so it gets picked up rather than lost.
 
 **Syntax guard.** A PreToolUse hook on writes. A shell or Python file under the
-paths in `syntax_check.paths` is rebuilt as the Write or Edit would leave it and
-parsed before it lands: `bash -n` for shell (`zsh -n` for a zsh shebang, when
-zsh is installed), a compile for Python, and a compile of the Python a shell
-file embeds in a `python3 -c '...'` body (any `python3.X` name) or a quoted
-heredoc. That last check exists because of one shape: an apostrophe in a comment
-inside a single-quoted `-c` body ends the shell string early. With an even quote
-count `bash -n` still passes and the Python runs cut off; it broke three hooks in
-one day. Checking before the write matters for hooks in particular, since a hook
-that does not parse refuses every call that runs it, including the fix.
+paths in `syntax_check.paths` is rebuilt as the Write, Edit or MultiEdit would
+leave it and parsed before it lands: `bash -n` for shell (`zsh -n` for a zsh
+shebang, when zsh is installed), a compile for Python, and a compile of the
+Python a shell file embeds in a `python3 -c '...'` body (any `python3.X` name)
+or a quoted heredoc. That last check exists because of one shape: an apostrophe
+in a comment inside a single-quoted `-c` body ends the shell string early. With
+an even quote count `bash -n` still passes and the Python runs cut off; it broke
+three hooks in one day. Checking before the write matters for hooks in
+particular, since a hook that does not parse refuses every call that runs it,
+including the fix.
 
 ## Liveness: proving a guard still blocks
 

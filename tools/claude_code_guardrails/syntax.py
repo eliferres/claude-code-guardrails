@@ -147,7 +147,7 @@ def syntax_problem(path: str, text: str, kind: str) -> Optional[str]:
 
 
 def file_after(payload: Dict[str, Any], path: str) -> Optional[str]:
-    """The text the file would hold once this Write or Edit lands, or None when the
+    """The text the file would hold once this Write, Edit or MultiEdit lands, or None when the
     tool itself will refuse the call (old_string missing, or found more than once
     without replace_all), which is that tool's refusal to make, not this guard's."""
     tool = payload.get("tool_name")
