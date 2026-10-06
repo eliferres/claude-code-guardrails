@@ -793,6 +793,12 @@ every_exit 2 "76 a cd in a pipeline does not move the folder" \
   "cd sub | true; echo x > guardrails.json" \
   "true | cd sub; echo x > guardrails.json"
 
+# Known limit, pinned so a change either way is noticed: a cd after && is
+# followed as if it ran, so when the command before it fails the write lands in
+# the folder before the cd, here the protected guardrails.json, and passes.
+every_exit 0 "78 known limit: a cd after && is followed as if it ran" \
+  "false && cd sub; echo x > guardrails.json"
+
 # When the reading fails, a brace expression in the raw text may hide the
 # command name ({r,}m is rm), so it keeps the refusal too.
 every_exit 2 "77 an unreadable command with a brace expression is refused" \
