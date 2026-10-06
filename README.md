@@ -1,6 +1,6 @@
 # claude-code-guardrails
 
-Four deterministic guards for Claude Code that refuse a dangerous command, a protected write, a colliding session, or a script that will not parse, before it runs, and say what to do instead. No model in the loop. A liveness harness proves the four still block, months later.
+Four guards for Claude Code that refuse a dangerous command, a protected write, a colliding session, or an unparseable script, and say what to do instead. No model in the loop.
 
 Bash and Python 3.9+, nothing else.
 
@@ -148,6 +148,7 @@ that does not parse refuses every call that runs it, including the fix.
 
 ## Liveness: proving a guard still blocks
 
+A liveness harness proves the four still block, months later.
 Guards rot quietly: a refactor loosens a pattern, a test starts passing for the
 wrong reason, and the wall has been open for a month. The manifest lists every
 installed guard, every guard needs at least one red case proving it still
