@@ -419,7 +419,7 @@ are blocked, it is that you can still prove, months later, that they are.
 - `tests/run-tests.sh`: the suite, real fixtures in temp dirs, no mocks.
 - `tests/red/`: one red case per blocked shape; liveness runs these.
 - `tests/demo-transcript.sh`: replays `demo/transcript.json` and checks the image against it.
-- `docs/what-slipped.md`: every bypass a review found, the commit that closed it and the test that pins it.
+- `docs/what-slipped.md`: every bypass a review found, what closed it, what is still open, and the test that pins it.
 
 State lives in `.guardrails/` inside the project: the approval token, the claims
 registry, the takeover ledger, the approval log and the decision log. Keep it

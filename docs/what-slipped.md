@@ -1,6 +1,6 @@
 # What slipped through, and what closed it
 
-Every way past the guards that a review found, with the commit that closed it and the test that pins it.
+Every bypass and over-refusal a review found, what closed it, what is still open, and the test that pins it.
 
 | Command shape that slipped | What the guard did | Fix | Test that pins it | Still a limit? |
 |---|---|---|---|---|
@@ -10,7 +10,7 @@ Every way past the guards that a review found, with the commit that closed it an
 | `tee {guardrails.json,}`, `echo x > {guardrails.json,}` | Could not read a brace list in a write target, and passed it | [1df7878](https://github.com/eliferres/claude-code-guardrails/commit/1df78782c5bf8a90d52bf66923199f1a758d55a1), follow-ups [6cf4d87](https://github.com/eliferres/claude-code-guardrails/commit/6cf4d87995a6f48a79894127c51fcc7cac3b166c), [aa6a3bd](https://github.com/eliferres/claude-code-guardrails/commit/aa6a3bd544ac34c8f864aa8900da1fef3c34f560), [4faf1a8](https://github.com/eliferres/claude-code-guardrails/commit/4faf1a806690a151f601bbad0b18a51305c5c93d) | `tests/run-tests.sh`: 58, 59, 63, 66, 67, 72 | No |
 | Any call while a guard crashes | Exited 1, which Claude Code reads as allow | [7d86515](https://github.com/eliferres/claude-code-guardrails/commit/7d86515b5ee7586cce04145832e476d0e69fd660) | `tests/run-tests.sh`: 60 | No |
 | `rm --rec -f ~/proj`, `rm --recursiv --forc ~/proj` | Did not read a shortened long option as the option it names | [b7ac8c0](https://github.com/eliferres/claude-code-guardrails/commit/b7ac8c08fcc489549de4d13b6f7d2cfb6618bdb0) | `tests/run-tests.sh`: 61, 62 | No |
-| Any relative write after a branch or group, e.g. `if true; then echo x > notes/out.txt; fi` | A pattern ending in a bare `*` was matched against the path as written, so every name matched | [697341c](https://github.com/eliferres/claude-code-guardrails/commit/697341cea152b626c7b4253352331000a4aa54bb) | `tests/run-tests.sh`: 64, 65 | No |
+| Any relative write after a branch or group, e.g. `if true; then echo x > notes/out.txt; fi` | Matched only the file name against the last part of a protected pattern; with `tools/*` that is a bare `*`, so every name matched | [697341c](https://github.com/eliferres/claude-code-guardrails/commit/697341cea152b626c7b4253352331000a4aa54bb) | `tests/run-tests.sh`: 64, 65 | No |
 | `cd "$PROJECT_DIR" && npm run build > build.log` | After a `cd` it cannot read, a relative write whose name matches the last part of a protected pattern is refused; `tools/*` matches every name | None, by design | `tests/run-tests.sh`: 72 | Yes, by design; see the README's shell-write section |
 | `pushd tools; echo x > a.sh`, `pushd notes; popd; popd; echo x > guardrails.json` | Lost the folder at `pushd` | [b1153a8](https://github.com/eliferres/claude-code-guardrails/commit/b1153a81f2818b65a54a4eca51467bb8597e00a9) | `tests/run-tests.sh`: 68, 69, 72 | `pushd +N`, `-N` and `-n` still lose the folder |
 | Eleven brace lists (`{a,b}` ×11), then `rm -r ~/x -f` | The full parse failed, and the rules saw the raw text only | [420cd54](https://github.com/eliferres/claude-code-guardrails/commit/420cd54b2d8e8e10ffbfe29153bd8f0b689beea5) | `tests/run-tests.sh`: 70 | No |
