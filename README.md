@@ -158,6 +158,9 @@ blocking, or if a red case still passes with the guard stubbed out. That last
 check is the point: a test that passes without the guard was never testing the
 guard.
 
+Every bypass a review found, and the commit that closed it:
+[docs/what-slipped.md](docs/what-slipped.md).
+
 ## The decision log: retiring a noisy rule
 
 Liveness proves a rule still fires; the decision log tells you whether it
